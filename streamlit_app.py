@@ -12,6 +12,8 @@ import pandas as pd
 import logging
 import numpy as np
 import requests
+import matplotlib.pyplot as plt
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -78,8 +80,9 @@ def get_bitcoin_returns(analysis_date):
     
     # Se algo der errado, retornar um DataFrame vazio
     return pd.DataFrame(columns=['date', 'price', 'daily_return', 'cumulative_return'])
-    
-def calculate_cumulative_return():
+
+
+def calculate_trade_returns():
     connection = connect_to_db()
     query = """
     SELECT 
@@ -101,140 +104,167 @@ def calculate_cumulative_return():
     df['prediction_date'] = pd.to_datetime(df['prediction_date'])
     df = df.sort_values('prediction_date')
     
-    cumulative_return = 0
-    results = []
+    trade_returns = []
     
-    position = None  # Nenhuma posição aberta no início
+    position = None
     entry_price = None
     stop_loss = None
     take_profit = None
+    entry_date = None
     
-    for i, row in df.iterrows():
-        date = row['prediction_date']
-        close = row['btc_close']
-        open_price = row['btc_open']
-        recommendation = row['recommendation'].lower()
-        sl = row['stop_loss']
-        tp = row['take_profit']
+    cumulative_return = 0
 
-        daily_return = 0  # Inicializa o retorno diário
+    # Iterar sobre todos os dias, preenchendo os retornos diários
+    all_dates = pd.date_range(start=df['prediction_date'].min(), end=df['prediction_date'].max())
 
-        # Se não temos uma posição aberta
-        if position is None:
-            if recommendation in ['compra', 'venda']:
-                # Abrimos uma posição
-                position = recommendation
-                entry_price = open_price
-                stop_loss = sl
-                take_profit = tp
-                # Nenhum retorno diário ainda, pois acabamos de abrir a posição
-            else:
-                # Sem posição e a recomendação é "aguardar"
-                daily_return = 0
-        else:
-            # Temos uma posição aberta
-            if position == 'compra':
-                # Verifica se atingiu Take Profit ou Stop Loss
-                if close >= take_profit:
-                    # Pegou Take Profit
-                    daily_return = (take_profit - entry_price) / entry_price
-                    position = None  # Fecha a posição
-                elif close <= stop_loss:
-                    # Pegou Stop Loss
-                    daily_return = (stop_loss - entry_price) / entry_price
-                    position = None  # Fecha a posição
-                else:
-                    # Nenhum dos dois foi atingido
-                    daily_return = (close - entry_price) / entry_price
-                    # Posição continua aberta
-            elif position == 'venda':
-                # Verifica se atingiu Take Profit ou Stop Loss
-                if close <= take_profit:
-                    # Pegou Take Profit (preço caiu)
-                    daily_return = (entry_price - take_profit) / entry_price
-                    position = None  # Fecha a posição
-                elif close >= stop_loss:
-                    # Pegou Stop Loss (preço subiu)
-                    daily_return = (entry_price - stop_loss) / entry_price
-                    position = None  # Fecha a posição
-                else:
-                    # Nenhum dos dois foi atingido
-                    daily_return = (entry_price - close) / entry_price
-                    # Posição continua aberta
+    for current_date in all_dates:
+        daily_data = df[df['prediction_date'] == current_date]
+        
+        if not daily_data.empty:
+            row = daily_data.iloc[0]
+            close = row['btc_close']
+            open_price = row['btc_open']
+            recommendation = str(row['recommendation']).lower()
+            sl = row['stop_loss']
+            tp = row['take_profit']
 
-        # Atualiza a rentabilidade cumulativa apenas se tivermos uma posição
-        if daily_return != 0:
-            cumulative_return += daily_return
-
-            # Reseta variáveis se a posição foi fechada
             if position is None:
-                entry_price = None
-                stop_loss = None
-                take_profit = None
+                if recommendation in ['compra', 'venda']:
+                    position = recommendation
+                    entry_price = open_price
+                    stop_loss = sl
+                    take_profit = tp
+                    entry_date = current_date
+            else:
+                if position == 'compra':
+                    if close >= take_profit:
+                        exit_price = take_profit
+                        daily_return = (exit_price - entry_price) / entry_price
+                    elif close <= stop_loss:
+                        exit_price = stop_loss
+                        daily_return = (exit_price - entry_price) / entry_price
+                    else:
+                        exit_price = close
+                        daily_return = (exit_price - entry_price) / entry_price
+                    
+                    cumulative_return += daily_return
+                    position = None
+                    entry_price = None
+                    stop_loss = None
+                    take_profit = None
+                    entry_date = None
 
-        results.append({
-            'date': date.strftime('%Y-%m-%d'),
-            'cumulative_return': cumulative_return
+                elif position == 'venda':
+                    if close <= take_profit:
+                        exit_price = take_profit
+                        daily_return = (entry_price - exit_price) / entry_price
+                    elif close >= stop_loss:
+                        exit_price = stop_loss
+                        daily_return = (entry_price - exit_price) / entry_price
+                    else:
+                        exit_price = close
+                        daily_return = (entry_price - exit_price) / entry_price
+                    
+                    cumulative_return += daily_return
+                    position = None
+                    entry_price = None
+                    stop_loss = None
+                    take_profit = None
+                    entry_date = None
+        # Adicionar o retorno acumulado do dia ao resultado, mantendo o valor anterior caso não haja operação
+        trade_returns.append({
+            'date': current_date.strftime('%Y-%m-%d'),
+            'cumulative_return': cumulative_return * 100
         })
 
-    return results
+    return pd.DataFrame(trade_returns)
 
+def plot_cumulative_returns():
+    df_returns = calculate_trade_returns()
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(df_returns['date'], df_returns['cumulative_return'], marker='o', label='Retorno Acumulado das Operações')
+    plt.xlabel('Data')
+    plt.ylabel('Retorno Acumulado (%)')
+    plt.title('Retorno Acumulado Diário das Operações')
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+    return df_returns
+
+
+
+
+def plot_returns():
+    trade_returns = calculate_return()
+    df_returns = pd.DataFrame(trade_returns)
+
+    # Verificar se a coluna 'prediction_date' está presente no DataFrame
+    if 'prediction_date' not in df_returns.columns:
+        raise KeyError("A coluna 'prediction_date' não está presente em df_returns. Verifique a estrutura dos dados retornados por calculate_return().")
+
+    # Verificar se 'return (%)' está presente no DataFrame
+    if 'return (%)' not in df_returns.columns:
+        raise KeyError("A coluna 'return (%)' não está presente em df_returns. Verifique a estrutura dos dados retornados por calculate_return().")
+
+    # Gerar o gráfico
+    plt.figure(figsize=(12, 6))
+    plt.plot(df_returns['prediction_date'], df_returns['return (%)'], marker='o', label='Retorno das Operações')
+    plt.xlabel('Data')
+    plt.ylabel('Retorno (%)')
+    plt.title('Retorno das Operações')
+    plt.xticks(rotation=45)
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+    return df_returns  # Retornar o DataFrame para uso posterior
 
 
 
 def calculate_btc_cumulative_return():
     connection = connect_to_db()
     query = """
-    SELECT MIN(prediction_date) as start_date, MAX(prediction_date) as end_date
+    SELECT 
+        DATE(datetime) as date, 
+        MAX(value_btc) as price
     FROM chatbot_data
-    WHERE actual_date IS NOT NULL
+    WHERE value_btc IS NOT NULL
+    GROUP BY DATE(datetime)
+    ORDER BY DATE(datetime)
     """
-    date_range = pd.read_sql_query(query, connection)
-    start_date = date_range['start_date'].iloc[0]
-    end_date = date_range['end_date'].iloc[0]
+    df = pd.read_sql_query(query, connection)
+    connection.close()
+    
+    # Calcular o retorno cumulativo
+    cumulative_return = 0
+    results = []
+    previous_price = None
 
-    # Convert date to datetime at midnight UTC
-    start_datetime = datetime.combine(start_date, datetime.min.time())
-    end_datetime = datetime.combine(end_date, datetime.min.time()) + timedelta(days=1)
+    for i, row in df.iterrows():
+        current_price = row['price']
+        date = row['date']
 
-    # Convert datetimes to Unix timestamps
-    start_timestamp = int(start_datetime.timestamp())
-    end_timestamp = int(end_datetime.timestamp())
-
-    # CoinGecko API request for the entire date range
-    url = f"https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range?vs_currency=usd&from={start_timestamp}&to={end_timestamp}"
-    response = requests.get(url)
-    data = response.json()
-
-    if 'prices' in data:
-        prices_df = pd.DataFrame(data['prices'], columns=['timestamp', 'price'])
-        prices_df['date'] = pd.to_datetime(prices_df['timestamp'], unit='ms').dt.date
-        
-        # Group by date and take the last price of each day
-        daily_prices = prices_df.groupby('date')['price'].last().reset_index()
-        
-        cumulative_return = 0
-        results = []
-        previous_price = daily_prices['price'].iloc[0]
-
-        for _, row in daily_prices.iterrows():
-            date = row['date']
-            price = row['price']
-            
-            daily_return = (price - previous_price) / previous_price
+        if previous_price is not None:
+            daily_return = (current_price - previous_price) / previous_price * 100
             cumulative_return += daily_return
+        else:
+            daily_return = 0  # No primeiro dia, não há retorno
 
-            results.append({
-                'date': date.strftime('%Y-%m-%d'),
-                'cumulative_return': cumulative_return
-            })
+        results.append({
+            'date': date.strftime('%Y-%m-%d'),
+            'cumulative_return': cumulative_return
+        })
 
-            previous_price = price
+        previous_price = current_price
 
-        return results
-    else:
-        print("Error fetching data from CoinGecko API")
-        return []
+    return results
+
+
+
+
 
 def prepare_data_for_graph(ai_returns, btc_returns):
     ai_df = pd.DataFrame(ai_returns)
@@ -253,6 +283,7 @@ def prepare_data_for_graph(ai_returns, btc_returns):
 
     return ai_df, btc_df
 
+
 def display_comparison_graph(ai_returns, btc_returns):
     operation_data, btc_data = prepare_data_for_graph(ai_returns, btc_returns)
 
@@ -264,17 +295,17 @@ def display_comparison_graph(ai_returns, btc_returns):
     if not operation_data.empty:
         fig.add_trace(go.Scatter(
             x=operation_data['prediction_date'], 
-            y=operation_data['cumulative_return'] * 100, 
-            mode='markers+lines', 
+            y=operation_data['cumulative_return'], 
+            mode='lines+markers',  # Linha contínua com marcadores
             name='Rentabilidade das Operações'
         ))
 
-    # Gráfico de rentabilidade do Bitcoin
+    # Gráfico de rentabilidade do Bitcoin (com marcadores)
     if not btc_data.empty:
         fig.add_trace(go.Scatter(
             x=btc_data['date'], 
-            y=btc_data['cumulative_return'] * 100, 
-            mode='markers+lines', 
+            y=btc_data['cumulative_return'], 
+            mode='lines+markers',  # Adicionando os marcadores
             name='Rentabilidade do Bitcoin'
         ))
 
@@ -288,9 +319,9 @@ def display_comparison_graph(ai_returns, btc_returns):
 
     # Ajuste de limites do eixo Y
     y_min = min(operation_data['cumulative_return'].min() if not operation_data.empty else 0,
-                btc_data['cumulative_return'].min() if not btc_data.empty else 0) * 100
+                btc_data['cumulative_return'].min() if not btc_data.empty else 0)
     y_max = max(operation_data['cumulative_return'].max() if not operation_data.empty else 0,
-                btc_data['cumulative_return'].max() if not btc_data.empty else 0) * 100
+                btc_data['cumulative_return'].max() if not btc_data.empty else 0)
     y_range = y_max - y_min
     fig.update_yaxes(range=[y_min - 0.1 * y_range, y_max + 0.1 * y_range])
 
@@ -458,7 +489,7 @@ else:
 
 display_next_updates()
 
-ai_returns = calculate_cumulative_return()
+ai_returns = plot_cumulative_returns()
 btc_returns = calculate_btc_cumulative_return()
 display_comparison_graph(ai_returns, btc_returns)
 
@@ -607,5 +638,3 @@ if st.session_state.update_counter >= 60:
     st.rerun()
 
 st.empty().text(f"Próxima atualização em {60 - st.session_state.update_counter} segundos")
-
-
