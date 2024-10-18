@@ -17,7 +17,7 @@ class derivatives_data:
     def __init__(self):
         # Instancia a classe options_volume em vez de chamar diretamente a análise
         self.options_volume = self.options_volume()
-        self.coinglass_key = "936395e1aa6943659c5ff7b729981532"
+        self.coinglass_key = os.getenv
 
     def convert_to_brt(self, timestamp):
         dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
