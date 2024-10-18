@@ -274,37 +274,41 @@ class derivatives_data:
     class market_depth:
         BASE_URL = "https://open-api-v3.coinglass.com/api/futures/orderbook/history"
 
-        def get_order_book_depth(self, symbol, exchange="Binance", interval="30m", limit=1000, start_time=None, end_time=None):
-            headers = {"accept": "application/json", "CG-API-KEY": os.getenv('COINGLASS_KEY')}
-            
+        def get_order_book_depth(self, symbol="BTCUSDT", exchange="Binance", interval="30m"):
+            headers = {
+                "accept": "application/json",
+                "CG-API-KEY": os.getenv('COINGLASS_KEY')  
+            }
+
             params = {
                 "exchange": exchange,
                 "symbol": symbol,
-                "interval": interval,
-                "limit": limit,
-                "startTime": start_time,
-                "endTime": end_time
+                "interval": interval
             }
-            
+
             response = requests.get(self.BASE_URL, headers=headers, params=params)
-            
+
             if response.status_code != 200:
-                print(f"Erro na requisição: {response.text}")
+                print(f"Erro na requisição, market_depth: {response.text}")
                 return None
+
             data = response.json()
-            return data  # Corrigido para retornar apenas os dados
+            if data.get("code") != "0":
+                print(f"Erro na resposta da API, market_depth: {data.get('msg')}")
+                return None
+
+            return data
 
         def convert_to_brt(self, timestamp):
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)  # Usando timezone.utc
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
             brt_tz = pytz.timezone('America/Sao_Paulo')
             dt_brt = dt.astimezone(brt_tz)
             return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
 
-
-        # Função para processar os dados da profundidade do mercado e armazenar em um DataFrame
         def process_order_book_to_df(self, data):
             if data is None:
-                return pd.DataFrame()  # Retornar DataFrame vazio em caso de erro na API
+                return pd.DataFrame()
+
             records = []
             for item in data.get("data", []):
                 bids_usd = item.get("bidsUsd", "N/A")
@@ -312,7 +316,6 @@ class derivatives_data:
                 asks_usd = item.get("asksUsd", "N/A")
                 asks_amount = item.get("asksAmount", "N/A")
                 timestamp = item.get("time", 0)
-                # Converter timestamp para data e hora em São Paulo
                 brt_time = self.convert_to_brt(timestamp)
                 records.append({
                     "Data/Hora (São Paulo)": brt_time,
@@ -324,29 +327,13 @@ class derivatives_data:
             df = pd.DataFrame(records)
             return df
 
-        # Função para capturar dados em blocos de 30 dias (30 minutos de intervalo por requisição)
-        def fetch_order_book_in_blocks(self, symbol="BTCUSDT", interval="30m", days=30):
-            now = datetime.utcnow()
-            df_list = []
-
-            while days > 0:
-                end_time = int(now.timestamp())
-                start_time = int((now - timedelta(minutes=30 * 1000)).timestamp())  # 1000 intervalos de 30 minutos
-                order_book_data = self.get_order_book_depth(symbol, start_time=start_time, end_time=end_time, interval=interval)
-                df = self.process_order_book_to_df(order_book_data)
-                if df.empty:
-                    print("Nenhum dado retornado para este intervalo.")
-                    break
-                df_list.append(df)
-
-                now = now - timedelta(minutes=30 * 1000)
-                days -= (30 * 1000) / (24 * 60)  # Subtrai o número de dias correspondentes
-
-            final_df = pd.concat(df_list, ignore_index=True)
-            return final_df
+        def fetch_order_book(self, symbol="BTCUSDT", exchange="Binance", interval="30m"):
+            data = self.get_order_book_depth(symbol=symbol, exchange=exchange, interval=interval)
+            df = self.process_order_book_to_df(data)
+            return df
 
         def analysis(self):
-            profundidade = self.fetch_order_book_in_blocks()
+            profundidade = self.fetch_order_book()
 
             if not profundidade.empty:
                 # Converter as colunas para float
@@ -366,48 +353,68 @@ class derivatives_data:
                 avg_asks_amount = profundidade["Asks Amount"].mean()
 
                 # Gerando a análise para a profundidade do mercado
-                profundidade_anl = (f"Durante os últimos 30 dias, o valor médio de Bids foi de {avg_bids_usd:.2f} USD, com um pico máximo de {max_bids_usd:.2f} USD. "
-                            f"O valor médio de Asks foi de {avg_asks_usd:.2f} USD, com um pico máximo de {max_asks_usd:.2f} USD.\n"
-                            f"A quantidade média de Bids foi de {avg_bids_amount:.2f}, enquanto a quantidade média de Asks foi de {avg_asks_amount:.2f}.")
+                profundidade_anl = (
+                    f"Durante o período analisado, o valor médio de Bids foi de {avg_bids_usd:.2f} USD, com um pico máximo de {max_bids_usd:.2f} USD. "
+                    f"O valor médio de Asks foi de {avg_asks_usd:.2f} USD, com um pico máximo de {max_asks_usd:.2f} USD.\n"
+                    f"A quantidade média de Bids foi de {avg_bids_amount:.2f}, enquanto a quantidade média de Asks foi de {avg_asks_amount:.2f}."
+                )
 
                 return profundidade_anl
             else:
                 return "Nenhum dado foi retornado para análise."
 
     
-    class liquidations:
+    class Liquidations:
         BASE_URL = "https://open-api-v3.coinglass.com/api/futures/liquidation/v2/history"
-        headers = {"accept": "application/json","CG-API-KEY": os.getenv('COINGLASS_KEY')}
 
-        # Função para capturar o histórico de liquidações de Long/Short de 30 em 30 minutos
-        def get_liquidation_history(self, symbol, exchange="Binance", interval="30m", limit=1000, start_time=None, end_time=None):
+        def get_liquidation_history(self, symbol="BTCUSDT", exchange="Binance", interval="30m"):
+            headers = {
+                "accept": "application/json",
+                "CG-API-KEY": '936395e1aa6943659c5ff7b729981532'
+            }
             params = {
                 "exchange": exchange,
-                "symbol": symbol,
-                "interval": interval,
-                "limit": limit,
-                "startTime": start_time,
-                "endTime": end_time
+                "symbol": symbol.upper(),
+                "interval": interval
             }
-            response = requests.get(self.BASE_URL, headers=self.headers, params=params)
-            return response.json()
 
-        # Função para converter timestamp para data e hora de São Paulo
+            response = requests.get(self.BASE_URL, headers=headers, params=params)
+
+            if response.status_code != 200:
+                print(f"Erro na requisição: {response.text}")
+                return None
+
+            data = response.json()
+
+            # Verifique se o campo 'success' está presente e é verdadeiro
+            if not data.get("success"):
+                print(f"Erro na resposta da API: {data.get('msg', 'Unknown error')}")
+                return None
+
+            if not data.get("data"):
+                print("Nenhum dado retornado pela API de liquidações.")
+                return None
+
+            return data["data"]
+
         def convert_to_brt(self, timestamp):
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)  # Usando timezone.utc
+            if timestamp is None:
+                return "N/A"  # Retorna "N/A" se o timestamp estiver ausente
+            dt = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)  # Timestamps em milissegundos
             brt_tz = pytz.timezone('America/Sao_Paulo')
             dt_brt = dt.astimezone(brt_tz)
             return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
 
-
-        # Função para processar os dados e armazenar em um DataFrame
         def process_liquidations_to_df(self, data):
+            if data is None:
+                return pd.DataFrame()
+
             records = []
-            for item in data.get("data", []):
-                long_liq = item.get("longLiquidationUsd", "N/A")
-                short_liq = item.get("shortLiquidationUsd", "N/A")
-                timestamp = item.get("t", 0)
-                brt_time = self.convert_to_brt(timestamp)
+            for item in data:
+                long_liq = item.get("longLiquidationUsd", 0) or 0
+                short_liq = item.get("shortLiquidationUsd", 0) or 0
+                timestamp = item.get("t")  # Obtém o valor do timestamp
+                brt_time = self.convert_to_brt(timestamp)  # Converte para o horário de Brasília
                 records.append({
                     "Data/Hora (São Paulo)": brt_time,
                     "Long Liquidation (USD)": long_liq,
@@ -416,287 +423,171 @@ class derivatives_data:
             df = pd.DataFrame(records)
             return df
 
-        # Função para capturar dados em blocos de 30 dias (30 minutos de intervalo por requisição)
-        def fetch_data_in_blocks(self, symbol = "BTCUSDT", interval="30m", days=30):
-            now = datetime.utcnow()
-            df_list = []
-
-            # Dividimos os 30 dias em blocos de intervalos de 1000 registros (aprox. 20.8 dias de 30 minutos)
-            while days > 0:
-                end_time = int(now.timestamp())
-                start_time = int((now - timedelta(minutes=30 * 1000)).timestamp())  # 1000 intervalos de 30 minutos
-                liquidation_data = self.get_liquidation_history(symbol, start_time=start_time, end_time=end_time, interval=interval)
-                df = self.process_liquidations_to_df(liquidation_data)
-                df_list.append(df)
-
-                # Atualiza a variável 'now' para continuar capturando períodos anteriores
-                now = now - timedelta(minutes=30 * 1000)
-                days -= (30 * 1000) / (24 * 60)  # Subtrai o número de dias correspondentes
-
-            # Concatena todos os DataFrames
-            final_df = pd.concat(df_list, ignore_index=True)
-            return final_df
+        def fetch_liquidations(self, symbol="BTCUSDT", exchange="Binance", interval="30m"):
+            data = self.get_liquidation_history(symbol=symbol, exchange=exchange, interval=interval)
+            if data:
+                df = self.process_liquidations_to_df(data)
+                return df
+            else:
+                return pd.DataFrame()
 
         def analysis(self):
-            liquidacoes = self.fetch_data_in_blocks()
+            liquidacoes = self.fetch_liquidations()
 
             if not liquidacoes.empty:
-                # Converter as colunas "Long Liquidation (USD)" e "Short Liquidation (USD)" para float
-                liquidacoes["Long Liquidation (USD)"] = liquidacoes["Long Liquidation (USD)"].astype(float)
-                liquidacoes["Short Liquidation (USD)"] = liquidacoes["Short Liquidation (USD)"].astype(float)
+                # Converter as colunas para float
+                liquidacoes["Long Liquidation (USD)"] = pd.to_numeric(liquidacoes["Long Liquidation (USD)"], errors='coerce')
+                liquidacoes["Short Liquidation (USD)"] = pd.to_numeric(liquidacoes["Short Liquidation (USD)"], errors='coerce')
 
-                # Filtrar os valores não-zero para a análise
-                long_liq_non_zero = liquidacoes[liquidacoes["Long Liquidation (USD)"] > 0]
-                short_liq_non_zero = liquidacoes[liquidacoes["Short Liquidation (USD)"] > 0]
+                # Cálculo das estatísticas básicas
+                avg_long_liq = liquidacoes["Long Liquidation (USD)"].mean() or 0.0
+                max_long_liq = liquidacoes["Long Liquidation (USD)"].max() or 0.0
+                last_long_liq = liquidacoes["Long Liquidation (USD)"].iloc[-1] or 0.0
 
-                # Cálculo das estatísticas básicas apenas para valores maiores que zero
-                if not long_liq_non_zero.empty:
-                    avg_long_liq = long_liq_non_zero["Long Liquidation (USD)"].mean()
-                    max_long_liq = long_liq_non_zero["Long Liquidation (USD)"].max()
-                    last_long_liq = long_liq_non_zero["Long Liquidation (USD)"].iloc[-1]
-                else:
-                    avg_long_liq = max_long_liq = last_long_liq = 0
+                avg_short_liq = liquidacoes["Short Liquidation (USD)"].mean() or 0.0
+                max_short_liq = liquidacoes["Short Liquidation (USD)"].max() or 0.0
+                last_short_liq = liquidacoes["Short Liquidation (USD)"].iloc[-1] or 0.0
 
-                if not short_liq_non_zero.empty:
-                    avg_short_liq = short_liq_non_zero["Short Liquidation (USD)"].mean()
-                    max_short_liq = short_liq_non_zero["Short Liquidation (USD)"].max()
-                    last_short_liq = short_liq_non_zero["Short Liquidation (USD)"].iloc[-1]
-                else:
-                    avg_short_liq = max_short_liq = last_short_liq = 0
-
-                # Gerando a análise para liquidações Long e Short, sem considerar zeros
-                liquidacoes_anl = (f"Durante os últimos 30 dias, o valor médio de liquidações Long (excluindo zeros) foi de {avg_long_liq:.2f} USD, "
-                            f"com um pico máximo de {max_long_liq:.2f} USD. O valor de liquidação Long mais recente foi de {last_long_liq:.2f} USD.\n"
-                            f"Para liquidações Short, o valor médio (excluindo zeros) foi de {avg_short_liq:.2f} USD, "
-                            f"com um pico máximo de {max_short_liq:.2f} USD. O valor de liquidação Short mais recente foi de {last_short_liq:.2f} USD.")
+                # Gerando a análise
+                liquidacoes_anl = (
+                    f"Durante o período analisado, o valor médio de liquidações Long foi de {avg_long_liq:.2f} USD, "
+                    f"com um pico máximo de {max_long_liq:.2f} USD. O valor de liquidação Long mais recente foi de {last_long_liq:.2f} USD.\n"
+                    f"Para liquidações Short, o valor médio foi de {avg_short_liq:.2f} USD, "
+                    f"com um pico máximo de {max_short_liq:.2f} USD. O valor de liquidação Short mais recente foi de {last_short_liq:.2f} USD."
+                )
 
                 return liquidacoes_anl
-
             else:
                 return "Nenhum dado foi retornado para análise."
             
     class ls_ratio:
-        BASE_URL = "https://open-api-v3.coinglass.com/api/futures/globalLongShortAccountRatio/history"
-        headers = {"accept": "application/json", "CG-API-KEY": os.getenv('COINGLASS_KEY')}
+        BASE_URL = "https://open-api.coinglass.com/api/pro/v1/futures/long_short_chart"
+        headers = {
+            "accept": "application/json",
+            "coinglassSecret": os.getenv('COINGLASS_KEY')
+        }
+
+        def get_long_short_ratio(self, symbol="BTC", interval=30, exchName="Binance"):
+            params = {
+                "symbol": symbol.upper(),
+                "exchName": exchName,
+                "type": f"{interval}min"
+            }
+            try:
+                response = requests.get(self.BASE_URL, headers=self.headers, params=params)
+                data = response.json()
+
+                # Verifica se a resposta da API foi bem-sucedida
+                if data.get("code") != 0:
+                    print(f"Erro na API: {data.get('msg')}")
+                    return None
+
+                if not data.get("data"):
+                    print("Nenhum dado retornado pela API de Long/Short Ratio.")
+                    return None
+
+                return data["data"]
+            except Exception as e:
+                print(f"Exceção ao chamar a API de Long/Short Ratio: {e}")
+                return None
 
         def convert_to_brt(self, timestamp):
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)  # Usando timezone.utc
+            dt = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)  # Timestamps em milissegundos
             brt_tz = pytz.timezone('America/Sao_Paulo')
             dt_brt = dt.astimezone(brt_tz)
             return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
 
-
-        def get_long_short_ratio(self, symbol, exchange="Binance", interval="30m", limit=1000, start_time=None, end_time=None):
-            params = {
-                "exchange": exchange,
-                "symbol": symbol,
-                "interval": interval,
-                "limit": limit,
-                "startTime": start_time,
-                "endTime": end_time
-            }
-            response = requests.get(self.BASE_URL, headers=self.headers, params=params)
-            return response.json()
-
         def process_long_short_ratio_to_df(self, data):
             records = []
-            for item in data.get("data", []):
-                long_account = item.get("longAccount", "N/A")
-                short_account = item.get("shortAccount", "N/A")
-                long_short_ratio = item.get("longShortRatio", "N/A")
-                timestamp = item.get("time", 0)
-                # Converter timestamp para data e hora em São Paulo
+            for item in data:
+                long_ratio = item.get("longRate", 0)
+                short_ratio = item.get("shortRate", 0)
+                timestamp = item.get("date")
                 brt_time = self.convert_to_brt(timestamp)
                 records.append({
                     "Data/Hora (São Paulo)": brt_time,
-                    "Long Account (%)": long_account,
-                    "Short Account (%)": short_account,
-                    "Long/Short Ratio": long_short_ratio
+                    "Long Account (%)": long_ratio,
+                    "Short Account (%)": short_ratio,
+                    "Long/Short Ratio": float(long_ratio) / float(short_ratio) if float(short_ratio) != 0 else None
                 })
             df = pd.DataFrame(records)
             return df
 
-        def fetch_data_in_blocks(self, symbol="BTCUSDT", interval="30m", total_days=30):
-            now = datetime.utcnow()
-            df_list = []
+        def fetch_long_short_ratio(self, symbol="BTC", interval=30, exchName="Binance"):
+            data = self.get_long_short_ratio(symbol=symbol, interval=interval, exchName=exchName)
+            if data:
+                df = self.process_long_short_ratio_to_df(data)
+                return df
+            else:
+                return pd.DataFrame()
 
-            while total_days > 0:
-                end_time = int(now.timestamp())
-                start_time = int((now - timedelta(minutes=30 * 1000)).timestamp())  # 1000 intervalos de 30 minutos
-
-                ratio_data = self.get_long_short_ratio(symbol, start_time=start_time, end_time=end_time, interval=interval)
-                df = self.process_long_short_ratio_to_df(ratio_data)
-                df_list.append(df)
-
-                # Atualiza a variável 'now' para continuar capturando períodos anteriores
-                now = now - timedelta(minutes=30 * 1000)
-                total_days -= (30 * 1000) / (24 * 60)  # Subtrai o número de dias correspondentes
-
-                    # Concatena todos os DataFrames
-                final_df = pd.concat(df_list, ignore_index=True)
-                return final_df
-        
         def analysis(self):
-            long_short_ratio = self.fetch_data_in_blocks()
+            long_short_ratio = self.fetch_long_short_ratio()
 
             if not long_short_ratio.empty:
-                # Converter as colunas "Long Account (%)", "Short Account (%)" e "Long/Short Ratio" para float
-                long_short_ratio["Long Account (%)"] = long_short_ratio["Long Account (%)"].astype(float)
-                long_short_ratio["Short Account (%)"] = long_short_ratio["Short Account (%)"].astype(float)
-                long_short_ratio["Long/Short Ratio"] = long_short_ratio["Long/Short Ratio"].astype(float)
+                # Converter as colunas para float
+                long_short_ratio["Long Account (%)"] = pd.to_numeric(long_short_ratio["Long Account (%)"], errors='coerce')
+                long_short_ratio["Short Account (%)"] = pd.to_numeric(long_short_ratio["Short Account (%)"], errors='coerce')
+                long_short_ratio["Long/Short Ratio"] = pd.to_numeric(long_short_ratio["Long/Short Ratio"], errors='coerce')
 
                 # Cálculo das estatísticas básicas
                 avg_ratio = long_short_ratio["Long/Short Ratio"].mean()
                 max_ratio = long_short_ratio["Long/Short Ratio"].max()
                 last_ratio = long_short_ratio["Long/Short Ratio"].iloc[-1]
 
-                # Identificando a tendência do Long/Short Ratio
-                if last_ratio > avg_ratio:
-                    trend = "acima da média"
-                else:
-                    trend = "abaixo da média"
+                # Identificando a tendência
+                trend = "acima da média" if last_ratio > avg_ratio else "abaixo da média"
 
-                    # Gerando a análise
-                long_short_anl = (f"O Long/Short Ratio médio para o Bitcoin no período analisado é de {avg_ratio:.6f}. "
-                            f"O maior Long/Short Ratio foi de {max_ratio:.6f}. "
-                            f"O Long/Short Ratio mais recente está {trend}, indicando uma possível "
-                            f"{('alta' if trend == 'acima da média' else 'queda')} na proporção de long/short.")
+                # Gerando a análise
+                long_short_anl = (
+                    f"A proporção média Long/Short para o Bitcoin no período analisado é de {avg_ratio:.4f}. "
+                    f"O maior valor registrado foi de {max_ratio:.4f}. "
+                    f"O valor mais recente está {trend}, indicando uma possível "
+                    f"{'predominância de posições longas' if trend == 'acima da média' else 'predominância de posições curtas'}."
+                )
 
                 return long_short_anl
-
             else:
                 return "Nenhum dado foi retornado para análise."
             
     class funding_rate_ohlc:
         BASE_URL = "https://open-api-v3.coinglass.com/api/futures/fundingRate/ohlc-history"
-        headers = {"accept": "application/json", "CG-API-KEY": os.getenv('COINGLASS_KEY')}
 
-        def convert_to_brt(self, timestamp):
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)  # Usando timezone.utc
-            brt_tz = pytz.timezone('America/Sao_Paulo')
-            dt_brt = dt.astimezone(brt_tz)
-            return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
-
-
-        # Função para obter o timestamp Unix
-        def get_unix_timestamp(self, days_ago=0):
-            dt = datetime.now() - timedelta(days=days_ago)
-            return int(dt.timestamp())
-
-        # Função para capturar OHLC History (Funding Rate) dos últimos 30 dias com intervalos de 30 minutos
         def get_funding_rate_ohlc(self, symbol="BTCUSDT", exchange="Binance", interval="30m"):
-            # Definir o período dos últimos 30 dias
-            end_time = self.get_unix_timestamp(0)  # Agora
-            start_time = self.get_unix_timestamp(30)  # Últimos 30 dias
+            headers = {
+                "accept": "application/json",
+                "CG-API-KEY": os.getenv('COINGLASS_KEY')  # Certifique-se de que sua chave de API está correta
+            }
 
             params = {
                 "exchange": exchange,
                 "symbol": symbol,
-                "interval": interval,
-                "startTime": start_time,
-                "endTime": end_time
+                "interval": interval
             }
 
-            response = requests.get(self.BASE_URL, headers=self.headers, params=params)
+            response = requests.get(self.BASE_URL, headers=headers, params=params)
 
             if response.status_code != 200:
-                return pd.DataFrame()
+                print(f"Erro na requisição funding_rate_ohlc: {response.text}")
+                return None
 
             data = response.json()
+            if data.get("code") != "0":
+                print(f"Erro na resposta da API funding_rate_ohlc: {data.get('msg')}")
+                return None
 
-            if not data.get("data"):
-                print("Nenhum dado retornado pela API.")
-                return pd.DataFrame()
+            return data
 
-            # Processar os dados
-            records = []
-            for item in data.get("data", []):
-                open_price = item.get("o", "N/A")
-                high_price = item.get("h", "N/A")
-                low_price = item.get("l", "N/A")
-                close_price = item.get("c", "N/A")
-                timestamp = item.get("t", 0)
-                brt_time = self.convert_to_brt(timestamp)
-                records.append({
-                    "Data/Hora (São Paulo)": brt_time,
-                    "Open": open_price,
-                    "High": high_price,
-                    "Low": low_price,
-                    "Close": close_price
-                })
-            df = pd.DataFrame(records)
-            return df
-        
-        def analysis(self):
-            # Capturar OHLC History para o par BTCUSDT com intervalos de 30 minutos nos últimos 30 dias
-            funding_rate_ohlc = self.get_funding_rate_ohlc(interval="30m")
-
-            if not funding_rate_ohlc.empty:
-                funding_rate_ohlc['Close'] = funding_rate_ohlc['Close'].astype(float)
-
-                avg_close = funding_rate_ohlc['Close'].mean()
-                max_close = funding_rate_ohlc['Close'].max()
-                last_close = funding_rate_ohlc['Close'].iloc[-1]
-
-                # Identificando a tendência do preço de fechamento do funding rate
-                if last_close > avg_close:
-                    trend = "acima da média"
-                else:
-                    trend = "abaixo da média"
-
-                # Gerando a análise
-                funding_rate_ohlc_anl = (f"O funding rate médio para o Bitcoin no período analisado é de {avg_close:.6f}. "
-                            f"O maior valor de fechamento foi {max_close:.6f}. "
-                            f"O fechamento mais recente está {trend}, indicando uma possível "
-                            f"{('alta' if trend == 'acima da média' else 'queda')} em relação à média.")
-
-                # Exibindo a análise
-                return funding_rate_ohlc_anl
-
-            else:
-                return "Nenhum dado foi retornado para análise."
-            
-    class oi_weight_ohlc:
-        BASE_URL = "https://open-api-v3.coinglass.com/api/futures/fundingRate/oi-weight-ohlc-history"
-        headers = {"accept": "application/json", "CG-API-KEY": os.getenv('COINGLASS_KEY')}
-
-        
         def convert_to_brt(self, timestamp):
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)  # Usando timezone.utc
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
             brt_tz = pytz.timezone('America/Sao_Paulo')
             dt_brt = dt.astimezone(brt_tz)
             return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
 
-        # Função para obter o timestamp Unix
-        def get_unix_timestamp(self, days_ago=0):
-            dt = datetime.now() - timedelta(days=days_ago)
-            return int(dt.timestamp())
-
-        # Função para capturar OI Weight OHLC History dos últimos 30 dias com intervalos de 30 minutos
-        def get_oi_weight_ohlc_history(self, symbol="BTC", interval="30m"):
-            end_time = self.get_unix_timestamp(0)  # Agora
-            start_time = self.get_unix_timestamp(30)  # Últimos 30 dias #os
-
-            params = {
-                "symbol": symbol,
-                "interval": interval,
-                "startTime": start_time,
-                "endTime": end_time
-            }
-
-            response = requests.get(self.BASE_URL, headers=self.headers, params=params)
-
-            if response.status_code != 200:
-                print("Erro na requisição:", response.text)
+        def process_data_to_df(self, data):
+            if data is None:
                 return pd.DataFrame()
 
-            data = response.json()
-
-            if not data.get("data"):
-                print("Nenhum dado retornado pela API.")
-                return pd.DataFrame()
-
-            # Processar os dados
             records = []
             for item in data.get("data", []):
                 open_price = item.get("o", "N/A")
@@ -712,18 +603,112 @@ class derivatives_data:
                     "Low": low_price,
                     "Close": close_price
                 })
-
             df = pd.DataFrame(records)
             return df
 
-        def analysis(self):
-            oi_weight_ohlc = self.get_oi_weight_ohlc_history(interval="30m")
-            if not oi_weight_ohlc.empty:
-                oi_weight_ohlc['Close'] = oi_weight_ohlc['Close'].astype(float)
+        def fetch_funding_rate(self, symbol="BTCUSDT", exchange="Binance", interval="30m"):
+            data = self.get_funding_rate_ohlc(symbol=symbol, exchange=exchange, interval=interval)
+            df = self.process_data_to_df(data)
+            return df
 
-                avg_close = oi_weight_ohlc['Close'].mean()
-                max_close = oi_weight_ohlc['Close'].max()
-                last_close = oi_weight_ohlc['Close'].iloc[-1]
+        def analysis(self):
+            funding_rate_df = self.fetch_funding_rate()
+
+            if not funding_rate_df.empty:
+                # Converter a coluna 'Close' para float
+                funding_rate_df['Close'] = funding_rate_df['Close'].astype(float)
+
+                avg_close = funding_rate_df['Close'].mean()
+                max_close = funding_rate_df['Close'].max()
+                last_close = funding_rate_df['Close'].iloc[-1]
+
+                if last_close > avg_close:
+                    trend = "acima da média"
+                else:
+                    trend = "abaixo da média"
+
+                funding_rate_anl = (
+                    f"O funding rate médio para o Bitcoin é de {avg_close:.6f}. "
+                    f"O maior valor de fechamento foi {max_close:.6f}. "
+                    f"O fechamento mais recente está {trend}, indicando uma possível "
+                    f"{'alta' if trend == 'acima da média' else 'queda'} em relação à média."
+                )
+
+                return funding_rate_anl
+            else:
+                return "Nenhum dado foi retornado para análise, funding_rate_ohlc"
+
+            
+    class oi_weight_ohlc:
+        BASE_URL = "https://open-api-v3.coinglass.com/api/futures/fundingRate/oi-weight-ohlc-history"
+
+        def get_oi_weight_ohlc_history(self, symbol="BTC", interval="30m"):
+            headers = {
+                "accept": "application/json",
+                "CG-API-KEY": os.getenv('COINGLASS_KEY')
+            }
+
+            params = {
+                "symbol": symbol,
+                "interval": interval
+            }
+
+            response = requests.get(self.BASE_URL, headers=headers, params=params)
+
+            if response.status_code != 200:
+                print(f"Erro na requisição, oi_weight_ohlc: {response.text}")
+                return None
+
+            data = response.json()
+            if data.get("code") != "0":
+                print(f"Erro na resposta da API, oi_weight_ohlc: {data.get('msg')}")
+                return None
+
+            return data
+
+        def convert_to_brt(self, timestamp):
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            brt_tz = pytz.timezone('America/Sao_Paulo')
+            dt_brt = dt.astimezone(brt_tz)
+            return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
+
+        def process_data_to_df(self, data):
+            if data is None:
+                return pd.DataFrame()
+
+            records = []
+            for item in data.get("data", []):
+                open_price = item.get("o", "N/A")
+                high_price = item.get("h", "N/A")
+                low_price = item.get("l", "N/A")
+                close_price = item.get("c", "N/A")
+                timestamp = item.get("t", 0)
+                brt_time = self.convert_to_brt(timestamp)
+                records.append({
+                    "Data/Hora (São Paulo)": brt_time,
+                    "Open": open_price,
+                    "High": high_price,
+                    "Low": low_price,
+                    "Close": close_price
+                })
+            df = pd.DataFrame(records)
+            return df
+
+        def fetch_oi_weight(self, symbol="BTC", interval="30m"):
+            data = self.get_oi_weight_ohlc_history(symbol=symbol, interval=interval)
+            df = self.process_data_to_df(data)
+            return df
+
+        def analysis(self):
+            oi_weight_df = self.fetch_oi_weight()
+
+            if not oi_weight_df.empty:
+                # Converter a coluna 'Close' para float
+                oi_weight_df['Close'] = oi_weight_df['Close'].astype(float)
+
+                avg_close = oi_weight_df['Close'].mean()
+                max_close = oi_weight_df['Close'].max()
+                last_close = oi_weight_df['Close'].iloc[-1]
 
                 if last_close > avg_close:
                     trend = "acima da média"
@@ -731,57 +716,58 @@ class derivatives_data:
                     trend = "abaixo da média"
 
                 # Gerando a análise
-                analysis = (f"O funding rate ponderado pelo open interest para o Bitcoin no período analisado tem uma média de {avg_close:.6f}. "
-                            f"O maior valor de fechamento foi {max_close:.6f}. "
-                            f"O fechamento mais recente está {trend}, indicando uma possível "
-                            f"{('alta' if trend == 'acima da média' else 'queda')} em relação à média.")
+                analysis = (
+                    f"O funding rate ponderado pelo open interest para o Bitcoin tem uma média de {avg_close:.6f}. "
+                    f"O maior valor de fechamento foi {max_close:.6f}. "
+                    f"O fechamento mais recente está {trend}, indicando uma possível "
+                    f"{'alta' if trend == 'acima da média' else 'queda'} em relação à média."
+                )
 
                 return analysis
 
             else:
-                return "Nenhum dado foi retornado para análise."
+                return "Nenhum dado foi retornado para análise, oi_weight_ohlc"
                 
 
+    
     class fundingratevol:
         BASE_URL = "https://open-api-v3.coinglass.com/api/futures/fundingRate/vol-weight-ohlc-history"
-        headers = {"accept": "application/json", "CG-API-KEY": os.getenv('COINGLASS_KEY')}
+
+        def get_vol_weight_ohlc_history(self, symbol="BTC", interval="30m"):
+            headers = {
+                "accept": "application/json",
+                "CG-API-KEY": os.getenv('COINGLASS_KEY')
+            }
+
+            params = {
+                "symbol": symbol,
+                "interval": interval
+            }
+
+            response = requests.get(self.BASE_URL, headers=headers, params=params)
+
+            if response.status_code != 200:
+                print(f"Erro na requisição: {response.text}")
+                return None
+
+            data = response.json()
+
+            if data.get("code") != "0":
+                print(f"Erro na resposta da API, fundingratevol: {data.get('msg')}")
+                return None
+
+            return data
 
         def convert_to_brt(self, timestamp):
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)  # Usando timezone.utc
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
             brt_tz = pytz.timezone('America/Sao_Paulo')
             dt_brt = dt.astimezone(brt_tz)
             return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
 
-
-        def get_unix_timestamp(self, days_ago=0):
-            dt = datetime.now() - timedelta(days=days_ago)
-            return int(dt.timestamp())
-
-    # Função para capturar Vol Weight OHLC History dos últimos 30 dias com intervalos de 30 minutos
-        def get_vol_weight_ohlc_history(self, symbol="BTC", interval="30m"):
-            end_time = self.get_unix_timestamp(0)  # Agora
-            start_time = self.get_unix_timestamp(30)  # Últimos 30 dias
-
-            params = {
-            "symbol": symbol,
-            "interval": interval,
-            "startTime": start_time,
-            "endTime": end_time
-            }
-
-            response = requests.get(self.BASE_URL, headers=self.headers, params=params)
-
-            if response.status_code != 200:
-                print("Erro na requisição:", response.text)
+        def process_data_to_df(self, data):
+            if data is None:
                 return pd.DataFrame()
 
-            data = response.json()
-
-            if not data.get("data"):
-                print("Nenhum dado retornado pela API.")
-                return pd.DataFrame()
-
-            # Processar os dados
             records = []
             for item in data.get("data", []):
                 open_price = item.get("o", "N/A")
@@ -797,163 +783,80 @@ class derivatives_data:
                     "Low": low_price,
                     "Close": close_price
                 })
-
-            # Criar DataFrame
             df = pd.DataFrame(records)
             return df
 
-    # Função para analisar os dados
+        def fetch_vol_weight(self, symbol="BTC", interval="30m"):
+            data = self.get_vol_weight_ohlc_history(symbol=symbol, interval=interval)
+            df = self.process_data_to_df(data)
+            return df
+
         def analysis(self):
-            vol_weight_ohlc = self.get_vol_weight_ohlc_history(interval="30m")
+            vol_weight_df = self.fetch_vol_weight()
 
-            if not vol_weight_ohlc.empty:
-                vol_weight_ohlc['Close'] = vol_weight_ohlc['Close'].astype(float)
+            if not vol_weight_df.empty:
+                vol_weight_df['Close'] = vol_weight_df['Close'].astype(float)
 
-                # Cálculo das estatísticas básicas
-                avg_close = vol_weight_ohlc['Close'].mean()
-                max_close = vol_weight_ohlc['Close'].max()
-                last_close = vol_weight_ohlc['Close'].iloc[-1]
+                avg_close = vol_weight_df['Close'].mean()
+                max_close = vol_weight_df['Close'].max()
+                last_close = vol_weight_df['Close'].iloc[-1]
 
-            # Identificando a tendência do preço de fechamento ponderado pelo volume
                 if last_close > avg_close:
                     trend = "acima da média"
                 else:
                     trend = "abaixo da média"
-                
-                funding_rate_vol = (f"O funding rate ponderado pelo volume para o Bitcoin no período analisado tem uma média de {avg_close:.6f}. "
-                        f"O maior valor de fechamento foi {max_close:.6f}. "
-                        f"O fechamento mais recente está {trend}, indicando uma possível "
-                        f"{('alta' if trend == 'acima da média' else 'queda')} em relação à média.")
+
+                funding_rate_vol = (
+                    f"O funding rate ponderado pelo volume para o Bitcoin tem uma média de {avg_close:.6f}. "
+                    f"O maior valor de fechamento foi {max_close:.6f}. "
+                    f"O fechamento mais recente está {trend}, indicando uma possível "
+                    f"{'alta' if trend == 'acima da média' else 'queda'} em relação à média."
+                )
 
                 return funding_rate_vol
 
             else:
                 return "Nenhum dado foi retornado para análise."
-
             
     class oi_ohlc:
         BASE_URL = "https://open-api-v3.coinglass.com/api/futures/openInterest/ohlc-history"
-        headers = {"accept": "application/json", "CG-API-KEY": os.getenv('COINGLASS_KEY')}
 
-        
-        def convert_to_brt(self, timestamp):
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc) 
-            brt_tz = pytz.timezone('America/Sao_Paulo')
-            dt_brt = dt.astimezone(brt_tz)
-            return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
-
-        # Função para obter o timestamp Unix
-        def get_unix_timestamp(self,days_ago=0):
-            dt = datetime.now() - timedelta(days=days_ago)
-            return int(dt.timestamp())
-
-        # Função para capturar Open Interest OHLC History dos últimos 30 dias com intervalos de 30 minutos
-        def get_open_interest_ohlc_history(self,symbol="BTCUSDT", exchange="Binance", interval="30m"):
-            # Definir o período dos últimos 30 dias
-            end_time = self.get_unix_timestamp(0)
-            start_time = self.get_unix_timestamp(30)  # Últimos 30 dias
+        def get_open_interest_ohlc_history(self, symbol="BTCUSDT", exchange="Binance", interval="30m"):
+            headers = {
+                "accept": "application/json",
+                "CG-API-KEY": os.getenv('COINGLASS_KEY')
+            }
 
             params = {
                 "exchange": exchange,
                 "symbol": symbol,
-                "interval": interval,
-                "startTime": start_time,
-                "endTime": end_time
+                "interval": interval
             }
 
-            response = requests.get(self.BASE_URL, headers=self.headers, params=params)
+            response = requests.get(self.BASE_URL, headers=headers, params=params)
 
             if response.status_code != 200:
-                print("Erro na requisição:", response.text)
-                return pd.DataFrame()
+                print(f"Erro na requisição: {response.text}")
+                return None
 
             data = response.json()
 
-            if not data.get("data"):
-                print("Nenhum dado retornado pela API.")
-                return pd.DataFrame()
+            if data.get("code") != "0":
+                print(f"Erro na resposta da API, oi_ohlc: {data.get('msg')}")
+                return None
 
-            # Processar os dados
-            records = []
-            for item in data.get("data", []):
-                open_price = item.get("o", "N/A")
-                high_price = item.get("h", "N/A")
-                low_price = item.get("l", "N/A")
-                close_price = item.get("c", "N/A")
-                timestamp = item.get("t", 0)
-                brt_time = self.convert_to_brt(timestamp)
-                records.append({
-                    "Data/Hora (São Paulo)": brt_time,
-                    "Open": open_price,
-                    "High": high_price,
-                    "Low": low_price,
-                    "Close": close_price
-                })
-
-            df = pd.DataFrame(records)
-            return df
-
-        def analysis(self):
-            open_interest_ohlc = self.get_open_interest_ohlc_history(interval="30m")
-
-            if not open_interest_ohlc.empty:
-                avg_close = open_interest_ohlc['Close'].astype(float).mean()
-                max_close = open_interest_ohlc['Close'].astype(float).max()
-                last_close = open_interest_ohlc['Close'].astype(float).iloc[-1]
-
-                if last_close > avg_close:
-                    trend = "acima da média"
-                else:
-                    trend = "abaixo da média"
-
-                open_interest_anl = (f"O preço médio de fechamento do Bitcoin no período analisado é de {avg_close:.2f}. "
-                            f"O preço de fechamento mais alto foi de {max_close:.2f}. "
-                            f"O fechamento mais recente está {trend}, indicando uma possível "
-                            f"{('alta' if trend == 'acima da média' else 'queda')} em relação à média.")
-
-                return open_interest_anl
-
-            else:
-                return "Nenhum dado foi retornado para análise."
-            
-    class oi_ohlc_history:
-        BASE_URL = "https://open-api-v3.coinglass.com/api/futures/openInterest/ohlc-aggregated-history"
-        headers = {"accept": "application/json","CG-API-KEY": os.getenv('COINGLASS_KEY')}
+            return data
 
         def convert_to_brt(self, timestamp):
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)  # Usando timezone.utc
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
             brt_tz = pytz.timezone('America/Sao_Paulo')
             dt_brt = dt.astimezone(brt_tz)
             return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
 
+        def process_data_to_df(self, data):
+            if data is None:
+                return pd.DataFrame()
 
-        def get_unix_timestamp(self, days_ago=0):
-            dt = datetime.now() - timedelta(days=days_ago)
-            return int(dt.timestamp())
-
-        # Função para capturar OHLC Aggregated History dos últimos 30 dias com intervalos de 30 minutos
-        def get_ohlc_aggregated_history(self, symbol="BTC", interval="30m"):
-            end_time = self.get_unix_timestamp(0)
-            start_time = self.get_unix_timestamp(30)  # Últimos 30 dias
-
-            params = {
-            "symbol": symbol,
-            "interval": interval,
-            "startTime": start_time,
-            "endTime": end_time
-            }
-
-            response = requests.get(self. BASE_URL, headers=self.headers, params=params)
-
-            if response.status_code != 200:
-                return "Erro na requisição:", response.text
-
-            data = response.json()
-
-            if not data.get("data"):
-                return "Nenhum dado retornado pela API."
-
-            # Processar os dados
             records = []
             for item in data.get("data", []):
                 open_price = item.get("o", "N/A")
@@ -972,27 +875,124 @@ class derivatives_data:
 
             df = pd.DataFrame(records)
             return df
-        
-        def analysis(self):
-            ohlc_aggregated_history = self.get_ohlc_aggregated_history(interval="30m")
 
-            if not ohlc_aggregated_history.empty:
-                avg_close = ohlc_aggregated_history['Close'].astype(float).mean()
-                max_close = ohlc_aggregated_history['Close'].astype(float).max()
-                last_close = ohlc_aggregated_history['Close'].astype(float).iloc[-1]
+        def fetch_open_interest(self, symbol="BTCUSDT", exchange="Binance", interval="30m"):
+            data = self.get_open_interest_ohlc_history(symbol=symbol, exchange=exchange, interval=interval)
+            df = self.process_data_to_df(data)
+            return df
+
+        def analysis(self):
+            open_interest_df = self.fetch_open_interest()
+
+            if not open_interest_df.empty:
+                # Converter a coluna 'Close' para float
+                open_interest_df['Close'] = open_interest_df['Close'].astype(float)
+
+                avg_close = open_interest_df['Close'].mean()
+                max_close = open_interest_df['Close'].max()
+                last_close = open_interest_df['Close'].iloc[-1]
 
                 if last_close > avg_close:
                     trend = "acima da média"
                 else:
                     trend = "abaixo da média"
-                    
-                analise_ohlc_aggr = (f"O preço médio de fechamento do Bitcoin no período analisado é de {avg_close:.2f}. "
-                            f"O preço de fechamento mais alto foi de {max_close:.2f}. "
-                            f"O fechamento mais recente está {trend}, indicando uma possível "
-                            f"{('alta' if trend == 'acima da média' else 'queda')} em relação à média.")
 
-                return analise_ohlc_aggr
+                open_interest_anl = (
+                    f"O open interest médio para o Bitcoin é de {avg_close:.2f}. "
+                    f"O maior valor de fechamento foi {max_close:.2f}. "
+                    f"O fechamento mais recente está {trend}, indicando uma possível "
+                    f"{'aumento' if trend == 'acima da média' else 'redução'} em relação à média."
+                )
+
+                return open_interest_anl
+
             else:
-                return "erro no oi_ohlc_history"
-    
-    
+                return "Nenhum dado foi retornado para análise, oi_ohlc"
+            
+    class oi_ohlc_aggregated_history:
+        BASE_URL = "https://open-api-v3.coinglass.com/api/futures/openInterest/ohlc-aggregated-history"
+
+        def get_ohlc_aggregated_history(self, symbol="BTC", interval="30m"):
+            headers = {
+                "accept": "application/json",
+                "CG-API-KEY": '936395e1aa6943659c5ff7b729981532' # Certifique-se de que a chave de API está correta
+            }
+
+            params = {
+                "symbol": symbol.upper(),
+                "interval": interval
+            }
+
+            response = requests.get(self.BASE_URL, headers=headers, params=params)
+
+            if response.status_code != 200:
+                print(f"Erro na requisição: {response.text}")
+                return None
+
+            data = response.json()
+            if data.get("code") != "0":
+                print(f"Erro na resposta da API: {data.get('msg')}")
+                return None
+
+            if not data.get("data"):
+                print("Nenhum dado retornado pela API.")
+                return None
+
+            return data["data"]
+
+        def convert_to_brt(self, timestamp):
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            brt_tz = pytz.timezone('America/Sao_Paulo')
+            dt_brt = dt.astimezone(brt_tz)
+            return dt_brt.strftime('%Y-%m-%d %H:%M:%S')
+
+        def process_data_to_df(self, data):
+            if data is None:
+                return pd.DataFrame()
+
+            records = []
+            for item in data:
+                open_price = item.get("o", "N/A")
+                high_price = item.get("h", "N/A")
+                low_price = item.get("l", "N/A")
+                close_price = item.get("c", "N/A")
+                timestamp = item.get("t", 0)
+                brt_time = self.convert_to_brt(timestamp)
+                records.append({
+                    "Data/Hora (São Paulo)": brt_time,
+                    "Open": open_price,
+                    "High": high_price,
+                    "Low": low_price,
+                    "Close": close_price
+                })
+            df = pd.DataFrame(records)
+            return df
+
+        def fetch_ohlc_history(self, symbol="BTC", interval="30m"):
+            data = self.get_ohlc_aggregated_history(symbol=symbol, interval=interval)
+            df = self.process_data_to_df(data)
+            return df
+
+        def analysis(self):
+            ohlc_aggregated_history = self.fetch_ohlc_history()
+
+            if not ohlc_aggregated_history.empty:
+                # Converter a coluna 'Close' para float
+                ohlc_aggregated_history["Close"] = ohlc_aggregated_history["Close"].astype(float)
+
+                avg_close = ohlc_aggregated_history["Close"].mean()
+                max_close = ohlc_aggregated_history["Close"].max()
+                last_close = ohlc_aggregated_history["Close"].iloc[-1]
+
+                trend = "acima da média" if last_close > avg_close else "abaixo da média"
+
+                analysis = (
+                    f"O valor médio de fechamento do Open Interest para o Bitcoin no período analisado é de {avg_close:.2f}. "
+                    f"O valor máximo registrado foi de {max_close:.2f}. "
+                    f"O valor de fechamento mais recente está {trend}, indicando uma possível "
+                    f"{'alta' if trend == 'acima da média' else 'queda'}."
+                )
+
+                return analysis
+            else:
+                return "Nenhum dado foi retornado para análise."

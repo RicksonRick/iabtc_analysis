@@ -67,7 +67,10 @@ class Conversation:
         
         try:
             analysis_results = run_all_analyses()
-            analysis_str = '\n'.join(f"{key}: {value}" for key, value in analysis_results.items())
+            if isinstance(analysis_results, dict):
+                analysis_str = '\n'.join(f"{key}: {value}" for key, value in analysis_results.items())
+            else:
+                raise ValueError("A função `run_all_analyses()` não retornou um dicionário conforme esperado.")
         except Exception as e:
             print(f"Erro ao executar as análises: {e}")
             return
