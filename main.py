@@ -46,10 +46,8 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    # Remover arquivo de parada, caso exista de uma execução anterior
     remove_stop_file()
 
-    # Iniciar processos
     task_server_process = run_task_server()
     time.sleep(5)
     streamlit_process = run_streamlit_app()

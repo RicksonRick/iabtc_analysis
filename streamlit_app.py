@@ -4,7 +4,7 @@ import pandas as pd
 import pytz
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
-from database_setting import connect_to_db
+from database.database_setting import connect_to_db
 #from exec_script import get_bitcoin_data
 import re
 from sqlalchemy import create_engine
@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-# Configurações da página
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 st.set_page_config(page_title="GPT_BTC", page_icon="🪙", layout="centered")
 brazil_tz = pytz.timezone('America/Sao_Paulo')
@@ -100,87 +99,126 @@ def calculate_trade_returns():
         prediction_date
     """
     df = pd.read_sql_query(query, connection)
+    connection.close()
     
+    # Standardize the recommendation strings
+    df['recommendation'] = df['recommendation'].str.lower().str.strip()
+    recommendation_mapping = {
+        'comprar': 'compra',
+        'compra': 'compra',
+        'vender': 'venda',
+        'venda': 'venda',
+        'aguardar': 'aguardar'
+    }
+    df['recommendation'] = df['recommendation'].map(recommendation_mapping).fillna('aguardar')
+    
+    # Convert prediction_date to datetime and sort
     df['prediction_date'] = pd.to_datetime(df['prediction_date'])
     df = df.sort_values('prediction_date')
     
+    # Initialize variables
     trade_returns = []
-    
     position = None
     entry_price = None
     stop_loss = None
     take_profit = None
     entry_date = None
+    cumulative_return = 1.0  # Start with 1.0 for multiplicative returns
     
-    cumulative_return = 0
-
-    # Iterar sobre todos os dias, preenchendo os retornos diários
+    # Create a date range from the minimum to the maximum prediction_date
     all_dates = pd.date_range(start=df['prediction_date'].min(), end=df['prediction_date'].max())
-
+    
     for current_date in all_dates:
         daily_data = df[df['prediction_date'] == current_date]
         
         if not daily_data.empty:
-            row = daily_data.iloc[0]
-            close = row['btc_close']
-            open_price = row['btc_open']
-            recommendation = str(row['recommendation']).lower()
-            sl = row['stop_loss']
-            tp = row['take_profit']
-
-            if position is None:
-                if recommendation in ['compra', 'venda']:
-                    position = recommendation
-                    entry_price = open_price
-                    stop_loss = sl
-                    take_profit = tp
-                    entry_date = current_date
-            else:
-                if position == 'compra':
-                    if close >= take_profit:
-                        exit_price = take_profit
-                        daily_return = (exit_price - entry_price) / entry_price
-                    elif close <= stop_loss:
-                        exit_price = stop_loss
-                        daily_return = (exit_price - entry_price) / entry_price
-                    else:
-                        exit_price = close
-                        daily_return = (exit_price - entry_price) / entry_price
-                    
-                    cumulative_return += daily_return
-                    position = None
-                    entry_price = None
-                    stop_loss = None
-                    take_profit = None
-                    entry_date = None
-
-                elif position == 'venda':
-                    if close <= take_profit:
-                        exit_price = take_profit
-                        daily_return = (entry_price - exit_price) / entry_price
-                    elif close >= stop_loss:
-                        exit_price = stop_loss
-                        daily_return = (entry_price - exit_price) / entry_price
-                    else:
-                        exit_price = close
-                        daily_return = (entry_price - exit_price) / entry_price
-                    
-                    cumulative_return += daily_return
-                    position = None
-                    entry_price = None
-                    stop_loss = None
-                    take_profit = None
-                    entry_date = None
-        # Adicionar o retorno acumulado do dia ao resultado, mantendo o valor anterior caso não haja operação
+            # Process all recommendations for the current date
+            for _, row in daily_data.iterrows():
+                close = row['btc_close']
+                open_price = row['btc_open']
+                recommendation = row['recommendation']
+                sl = row['stop_loss']
+                tp = row['take_profit']
+    
+                # Debugging: Print current processing information
+                print(f"Processing Date: {current_date.date()} | Recommendation: {recommendation}")
+    
+                if position is None:
+                    if recommendation in ['compra', 'venda']:
+                        position = recommendation
+                        entry_price = open_price
+                        stop_loss = sl
+                        take_profit = tp
+                        entry_date = current_date
+                        print(f"Entered Position: {position} at {entry_price}")
+                else:
+                    # Only close the position; do not open a new one until current is closed
+                    if position == 'compra':
+                        if pd.isna(close):
+                            # Cannot close position, keep it open
+                            print(f"Cannot close 'compra' position on {current_date.date()} due to NaN close price.")
+                            continue
+                        if close >= take_profit:
+                            exit_price = take_profit
+                            daily_return = (exit_price - entry_price) / entry_price
+                            print(f"Take Profit hit for compra. Exit at {exit_price}")
+                        elif close <= stop_loss:
+                            exit_price = stop_loss
+                            daily_return = (exit_price - entry_price) / entry_price
+                            print(f"Stop Loss hit for compra. Exit at {exit_price}")
+                        else:
+                            exit_price = close
+                            daily_return = (exit_price - entry_price) / entry_price
+                            print(f"Position 'compra' closed at market price {exit_price}")
+    
+                        cumulative_return *= (1 + daily_return)
+                        position = None
+                        entry_price = None
+                        stop_loss = None
+                        take_profit = None
+                        entry_date = None
+                        print(f"Cumulative Return Updated: {(cumulative_return - 1) * 100:.6f}%")
+    
+                    elif position == 'venda':
+                        if pd.isna(close):
+                            # Cannot close position, keep it open
+                            print(f"Cannot close 'venda' position on {current_date.date()} due to NaN close price.")
+                            continue
+                        if close <= take_profit:
+                            exit_price = take_profit
+                            daily_return = (entry_price - exit_price) / entry_price
+                            print(f"Take Profit hit for venda. Exit at {exit_price}")
+                        elif close >= stop_loss:
+                            exit_price = stop_loss
+                            daily_return = (entry_price - exit_price) / entry_price
+                            print(f"Stop Loss hit for venda. Exit at {exit_price}")
+                        else:
+                            exit_price = close
+                            daily_return = (entry_price - exit_price) / entry_price
+                            print(f"Position 'venda' closed at market price {exit_price}")
+    
+                        cumulative_return *= (1 + daily_return)
+                        position = None
+                        entry_price = None
+                        stop_loss = None
+                        take_profit = None
+                        entry_date = None
+                        print(f"Cumulative Return Updated: {(cumulative_return - 1) * 100:.6f}%")
+        
+        # Append the cumulative return for the current date
         trade_returns.append({
             'date': current_date.strftime('%Y-%m-%d'),
-            'cumulative_return': cumulative_return * 100
+            'cumulative_return': (cumulative_return - 1) * 100  # Convert to percentage
         })
-
-    return pd.DataFrame(trade_returns)
+    
+    # Convert to DataFrame
+    df_returns = pd.DataFrame(trade_returns)
+    
+    return df_returns
 
 def plot_cumulative_returns():
     df_returns = calculate_trade_returns()
+    print(df_returns)
 
     plt.figure(figsize=(12, 6))
     plt.plot(df_returns['date'], df_returns['cumulative_return'], marker='o', label='Retorno Acumulado das Operações')
@@ -193,36 +231,6 @@ def plot_cumulative_returns():
     plt.show()
 
     return df_returns
-
-
-
-
-def plot_returns():
-    trade_returns = calculate_return()
-    df_returns = pd.DataFrame(trade_returns)
-
-    # Verificar se a coluna 'prediction_date' está presente no DataFrame
-    if 'prediction_date' not in df_returns.columns:
-        raise KeyError("A coluna 'prediction_date' não está presente em df_returns. Verifique a estrutura dos dados retornados por calculate_return().")
-
-    # Verificar se 'return (%)' está presente no DataFrame
-    if 'return (%)' not in df_returns.columns:
-        raise KeyError("A coluna 'return (%)' não está presente em df_returns. Verifique a estrutura dos dados retornados por calculate_return().")
-
-    # Gerar o gráfico
-    plt.figure(figsize=(12, 6))
-    plt.plot(df_returns['prediction_date'], df_returns['return (%)'], marker='o', label='Retorno das Operações')
-    plt.xlabel('Data')
-    plt.ylabel('Retorno (%)')
-    plt.title('Retorno das Operações')
-    plt.xticks(rotation=45)
-    plt.legend()
-    plt.grid()
-    plt.show()
-
-    return df_returns  # Retornar o DataFrame para uso posterior
-
-
 
 def calculate_btc_cumulative_return():
     connection = connect_to_db()

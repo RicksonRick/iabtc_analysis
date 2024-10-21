@@ -2,9 +2,9 @@ import schedule
 import time
 import pytz
 from datetime import datetime, timedelta
-from chatbot_v3 import Conversation
-from database_setting import insert_actual_bitcoin_data, connect_to_db
-from exec_script import get_bitcoin_price_and_variation
+from BTC_analysis.chatbot.chatbot_v3 import Conversation
+from BTC_analysis.database.database_setting import insert_actual_bitcoin_data, connect_to_db
+from BTC_analysis.analysis.exec_script import get_bitcoin_price_and_variation
 import pandas as pd
 import threading
 import json
@@ -12,18 +12,10 @@ import re
 
 brazil_tz = pytz.timezone('America/Sao_Paulo')
 
-def run_conversation():
-    ai_response = Conversation()
-    response = ai_response.send()
-    save_gpt_analysis(response)
-    print(f"Análise GPT executada em {datetime.now(brazil_tz)}")
-
 def update_bitcoin_data():
     data = get_bitcoin_price_and_variation()
-    
-    # Verifique se o retorno é uma string e precisa ser processado
+
     if isinstance(data, str):
-        # Usar regex para extrair os valores de 'price', 'var_30d', 'var_14d' e 'var_7d'
         price_match = re.search(r"Preço atual do Bitcoin: \$([0-9,.]+)", data)
         var_30d_match = re.search(r"Variação nos últimos 30 dias: ([0-9,.]+)%", data)
         var_14d_match = re.search(r"Variação nos últimos 14 dias: ([0-9,.]+)%", data)
@@ -125,6 +117,12 @@ def schedule_next_run(task, scheduled_time):
     delay = (next_run - now).total_seconds()
     threading.Timer(delay, task).start()
     print(f"Próxima execução de {task.__name__} agendada para {next_run}")
+    
+def run_conversation():
+    ai_response = Conversation()
+    response = ai_response.send()
+    save_gpt_analysis(response)
+    print(f"Análise GPT executada em {datetime.now(brazil_tz)}")
 
 if __name__ == "__main__":
     schedule_next_run(run_conversation, datetime.now(brazil_tz).replace(hour=21, minute=0))
