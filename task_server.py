@@ -2,9 +2,9 @@ import schedule
 import time
 import pytz
 from datetime import datetime, timedelta
-from BTC_analysis.chatbot.chatbot_v3 import Conversation
-from BTC_analysis.database.database_setting import insert_actual_bitcoin_data, connect_to_db
-from BTC_analysis.analysis.exec_script import get_bitcoin_price_and_variation
+from chatbot.chatbot_v3 import Conversation
+from database.database_setting import insert_actual_bitcoin_data, connect_to_db
+from analysis.exec_script import get_bitcoin_price_and_variation
 import pandas as pd
 import threading
 import json
