@@ -8,6 +8,7 @@ from analysis.exec_script import get_bitcoin_price_and_variation
 import pandas as pd
 import threading
 import json
+from webhook import enviar_dados_para_urls, get_bitcoin_data
 import re
 
 brazil_tz = pytz.timezone('America/Sao_Paulo')
@@ -21,7 +22,6 @@ def update_bitcoin_data():
         var_14d_match = re.search(r"Variação nos últimos 14 dias: ([0-9,.]+)%", data)
         var_7d_match = re.search(r"Variação nos últimos 7 dias: ([0-9,.]+)%", data)
         
-        # Certifique-se de que as correspondências foram encontradas antes de prosseguir
         if price_match and var_30d_match and var_14d_match and var_7d_match:
             data = {
                 'price': float(price_match.group(1).replace(',', '')),
@@ -122,12 +122,13 @@ def run_conversation():
     ai_response = Conversation()
     response = ai_response.send()
     save_gpt_analysis(response)
-    print(f"Análise GPT executada em {datetime.now(brazil_tz)}")
+    print(f"Análise GPT executada em {datetime.now(brazil_tz)}, {response}")
 
 if __name__ == "__main__":
     schedule_next_run(run_conversation, datetime.now(brazil_tz).replace(hour=21, minute=0))
     schedule_next_run(insert_actual_bitcoin_data, datetime.now(brazil_tz).replace(hour=21, minute=5))
-
+    schedule_next_run(enviar_dados_para_urls, datetime.now(brazil_tz).replace(hour=21, minute=15))
+    
     schedule.every().hour.do(update_operation_data)
     schedule.every().hour.do(calculate_bitcoin_returns)
 

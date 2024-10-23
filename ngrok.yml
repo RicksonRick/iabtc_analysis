@@ -1,0 +1,9 @@
+version: "2"
+authtoken: 2nqjjxb2JyLFcBDnvYTVUv4OSHY_7hHfnNvW3ryBGziDdJhU8
+tunnels:
+  streamlit:
+    addr: 8501
+    proto: http
+  api:
+    addr: 8001
+    proto: http

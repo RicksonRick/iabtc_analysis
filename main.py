@@ -6,7 +6,6 @@ import signal
 import psutil
 from datetime import datetime, timedelta, timezone
 
-# Arquivo de controle para sinalizar a interrupção
 STOP_FILE = '/tmp/stop_gpt_btc_analyzer'
 
 def create_stop_file():
@@ -28,6 +27,10 @@ def run_streamlit_app():
     print("Iniciando o aplicativo Streamlit...")
     return subprocess.Popen([sys.executable, "-m", "streamlit", "run", "streamlit_app.py"])
 
+def run_fastapi_server():
+    print("Iniciando o servidor FastAPI na porta 8001...")
+    return subprocess.Popen([sys.executable, "-m", "uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8001"])
+
 def terminate_process(process):
     if process.poll() is None:
         print(f"Terminando processo {process.pid}")
@@ -42,17 +45,19 @@ def signal_handler(signum, frame):
     create_stop_file()
 
 if __name__ == "__main__":
-    # Configurar o manipulador de sinais
+
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
     remove_stop_file()
 
+    # Iniciar servidores
     task_server_process = run_task_server()
     time.sleep(5)
     streamlit_process = run_streamlit_app()
+    fastapi_process = run_fastapi_server()
 
-    print("Ambos os processos foram iniciados. Para interromper, use SIGTERM ou crie o arquivo /tmp/stop_gpt_btc_analyzer")
+    print("Todos os processos foram iniciados. Para interromper, use SIGTERM ou crie o arquivo /tmp/stop_gpt_btc_analyzer")
 
     try:
         while not should_stop():
@@ -63,5 +68,5 @@ if __name__ == "__main__":
         print("Iniciando processo de desligamento...")
         terminate_process(streamlit_process)
         terminate_process(task_server_process)
+        terminate_process(fastapi_process)
         remove_stop_file()
-
