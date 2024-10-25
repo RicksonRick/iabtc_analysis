@@ -122,6 +122,7 @@ def run_conversation():
     ai_response = Conversation()
     response = ai_response.send()
     save_gpt_analysis(response)
+    print(response)
     print(f"Análise GPT executada em {datetime.now(brazil_tz)}, {response}")
 
 if __name__ == "__main__":

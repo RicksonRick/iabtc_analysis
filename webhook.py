@@ -118,3 +118,32 @@ async def cadastrar_url(request: URLRequest, api_key: str = Header(...)):
         return {"message": "URL cadastrada com sucesso."}
     else:
         return {"message": "A URL já está cadastrada."}
+
+@router.post("/DadosGPT",
+    summary="Receber dados do GPT",
+    description="""
+    Este endpoint receber automaticamente os dados da última análise do GPT.
+
+    **Funcionamento:**
+    - As análises são feitas diariamente às 21:05 (horário local), 5 minutos após o fechamento do mercado às 00:00 UTC.
+
+    **Campos obrigatórios no cabeçalho:**
+    - `api-key`: Chave da API (fornecida pelo sistema).
+
+    **Resposta de sucesso:**
+    - Em caso de sucesso, o sistema retornará 200.
+    
+    ***Exemplo de resposta da análise do GPT:***
+    (200, {'recommendation': 'Compra', 'stop_loss': 66200.0, 'take_profit': 68500.0, 'risk_return': '1:2', 'value_btc': 67187.0, 'datetime': '2024-10-23T00:30:03.324596'})
+    """)
+def receber_previsões(api_key: str = Header(...)):
+    data = load_data()
+    if api_key not in data["API_KEYS"]:
+        return "API não cadastrada"
+    
+    status, dados = get_bitcoin_data()
+    if status == 200:
+        return {"status": status, "dados": dados}
+    
+    else:
+        {"status": 400, "resposta": "Erro na requisição"}

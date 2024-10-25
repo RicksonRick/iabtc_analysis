@@ -7,8 +7,6 @@ numpy
 ta
 pytz
 streamlit
-transformers
-torch
 newsapi-python
 fredapi
 groq
@@ -18,3 +16,5 @@ tiktoken
 sqlalchemy
 schedule
 matplotlib
+uvicorn
+fastapi

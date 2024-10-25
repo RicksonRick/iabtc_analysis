@@ -5,6 +5,7 @@ import time
 import signal
 import psutil
 from datetime import datetime, timedelta, timezone
+from task_server import run_conversation
 
 STOP_FILE = '/tmp/stop_gpt_btc_analyzer'
 
@@ -51,7 +52,6 @@ if __name__ == "__main__":
 
     remove_stop_file()
 
-    # Iniciar servidores
     task_server_process = run_task_server()
     time.sleep(5)
     streamlit_process = run_streamlit_app()
