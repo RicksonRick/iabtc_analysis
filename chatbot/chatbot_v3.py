@@ -67,7 +67,7 @@ class Conversation:
 
         analysis_results = run_all_analyses()
         analysis_results_str = str(analysis_results)
-        
+        print(analysis_results)
         messages.append({"role": "user", "content": analysis_results_str})
 
         try:

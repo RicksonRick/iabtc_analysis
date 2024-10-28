@@ -2,30 +2,64 @@ from analysis.derivatives import derivatives_data
 from analysis.onchain_data import OnChain
 from analysis.economic_data import economic_dt
 import requests
+import os
 from datetime import datetime, timedelta
+from decimal import Decimal
+from dotenv import load_dotenv
+load_dotenv()
 
+#analysis.
 def get_bitcoin_price_and_variation():
+    print("Iniciando função CoinGecko")
+
     base_url = "https://api.coingecko.com/api/v3"
+    api_key = os.getenv('COINGEKO_KEY')
+    headers = {
+        "accept": "application/json",
+        "x-cg-demo-api-key": api_key
+    }
 
     price_url = f"{base_url}/simple/price?ids=bitcoin&vs_currencies=usd"
-    response = requests.get(price_url)
-    data = response.json()
-
-    current_price = data['bitcoin']['usd']
+    try:
+        response = requests.get(price_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        print("Requisição de preço concluída:", response)
+    except requests.RequestException as e:
+        print("Erro ao obter preço atual do Bitcoin:", e)
+        return
     
+    data = response.json()
+    current_price = data['bitcoin']['usd']
+
     def get_variation(days):
         date = (datetime.now() - timedelta(days=days)).strftime('%d-%m-%Y')
-        market_data_url = f"{base_url}/coins/bitcoin/history?date={date}"
-        response = requests.get(market_data_url)
+        market_data_url = f"{base_url}/coins/bitcoin/history?date={date}&localization=false"
+        
+        try:
+            response = requests.get(market_data_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            print(f"Requisição de dados históricos para {days} dias concluída:", response)
+        except requests.RequestException as e:
+            print(f"Erro ao obter dados históricos para {days} dias atrás:", e)
+            return None
+        
         historical_data = response.json()
+        
+        if 'market_data' not in historical_data or 'current_price' not in historical_data['market_data']:
+            print(f"Dados históricos indisponíveis para {days} dias atrás.")
+            return None
+        
         historical_price = historical_data['market_data']['current_price']['usd']
-        variation = ((current_price - historical_price) / historical_price) * 100
+        variation = ((Decimal(current_price) - Decimal(historical_price)) / Decimal(historical_price)) * 100
+        print(f"Variação de {days} dias: {variation}")
         return variation
-    
+
     variation_30d = get_variation(30)
     variation_14d = get_variation(14)
     variation_7d = get_variation(7)
 
+    print("Terminou função CoinGecko")
+    print(variation_30d, variation_14d, variation_7d)
     return (
         f"Preço atual do Bitcoin: ${current_price:.2f}\n"
         f"Variação nos últimos 30 dias: {variation_30d:.2f}%\n"
@@ -34,13 +68,16 @@ def get_bitcoin_price_and_variation():
     )
     
 def run_all_analyses():
+    print("iniciando analise")
     results = {}
     deriv_data = derivatives_data()
     onchain = OnChain()
     errors = {}
 
     try:
+        print("iniciando COingeko")
         bitcoin_analysis = get_bitcoin_price_and_variation()
+        print(bitcoin_analysis)
         results["Bitcoin Analysis"] = bitcoin_analysis
     except Exception as e:
         print(e)
@@ -153,5 +190,9 @@ def run_all_analyses():
     except Exception as e:
         errors["Economic Data Analysis"] = f"Erro: {e}"
 
-    # Retorna resultados e erros
     return {"results": results, "errors": errors}
+
+#oi = get_bitcoin_price_and_variation()
+#print(oi)
+#ola = run_all_analyses()
+#print(ola)

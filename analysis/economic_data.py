@@ -152,7 +152,6 @@ class economic_dt:
         
 
         def get_top_news_of_month_with_sentiment(self, subject):
-            # Definir o período do último mês
             today = datetime.today()
             one_month_ago = today - timedelta(weeks=4)
 

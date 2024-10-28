@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 #oi_ohlc_history
 load_dotenv()
 
+
+
 class derivatives_data:
     def __init__(self):
         self.options_volume = self.options_volume()
@@ -232,12 +234,17 @@ class derivatives_data:
     class volume_change:   
         def puxar_dados(self):
             url = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart'
+            api_key = os.getenv('COINGEKO_KEY')
+            headers = {
+                "accept": "application/json",
+                "x-cg-demo-api-key": api_key
+            }
             params = {
                 'vs_currency': 'usd',
                 'days': '14',
                 'interval': 'daily'
             }
-            response = requests.get(url, params=params)
+            response = requests.get(url, params=params, headers=headers)
             data = response.json()
 
             prices = data['prices']

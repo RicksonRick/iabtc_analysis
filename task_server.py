@@ -119,6 +119,7 @@ def schedule_next_run(task, scheduled_time):
     print(f"Próxima execução de {task.__name__} agendada para {next_run}")
     
 def run_conversation():
+    print("Iniciando analise do GPT")
     ai_response = Conversation()
     response = ai_response.send()
     save_gpt_analysis(response)
@@ -129,7 +130,7 @@ if __name__ == "__main__":
     schedule_next_run(run_conversation, datetime.now(brazil_tz).replace(hour=21, minute=0))
     schedule_next_run(insert_actual_bitcoin_data, datetime.now(brazil_tz).replace(hour=21, minute=5))
     schedule_next_run(enviar_dados_para_urls, datetime.now(brazil_tz).replace(hour=21, minute=15))
-    
+
     schedule.every().hour.do(update_operation_data)
     schedule.every().hour.do(calculate_bitcoin_returns)
 
