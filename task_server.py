@@ -13,30 +13,6 @@ import re
 
 brazil_tz = pytz.timezone('America/Sao_Paulo')
 
-def update_bitcoin_data():
-    data = get_bitcoin_price_and_variation()
-
-    if isinstance(data, str):
-        price_match = re.search(r"Preço atual do Bitcoin: \$([0-9,.]+)", data)
-        var_30d_match = re.search(r"Variação nos últimos 30 dias: ([0-9,.]+)%", data)
-        var_14d_match = re.search(r"Variação nos últimos 14 dias: ([0-9,.]+)%", data)
-        var_7d_match = re.search(r"Variação nos últimos 7 dias: ([0-9,.]+)%", data)
-        
-        if price_match and var_30d_match and var_14d_match and var_7d_match:
-            data = {
-                'price': float(price_match.group(1).replace(',', '')),
-                'var_30d': float(var_30d_match.group(1).replace(',', '')),
-                'var_14d': float(var_14d_match.group(1).replace(',', '')),
-                'var_7d': float(var_7d_match.group(1).replace(',', ''))
-            }
-        else:
-            print("Erro ao processar os dados da string.")
-            return
-    else:
-        print("Erro: O objeto data não é uma string.")
-
-    save_bitcoin_data(data)
-    print(f"Dados do Bitcoin atualizados em {datetime.now(brazil_tz)}")
 
 def update_operation_data():
     connection = connect_to_db()
@@ -118,6 +94,31 @@ def schedule_next_run(task, scheduled_time):
     threading.Timer(delay, task).start()
     print(f"Próxima execução de {task.__name__} agendada para {next_run}")
     
+def update_bitcoin_data():
+    data = get_bitcoin_price_and_variation()
+
+    if isinstance(data, str):
+        price_match = re.search(r"Preço atual do Bitcoin: \$([0-9,.]+)", data)
+        var_30d_match = re.search(r"Variação nos últimos 30 dias: ([0-9,.]+)%", data)
+        var_14d_match = re.search(r"Variação nos últimos 14 dias: ([0-9,.]+)%", data)
+        var_7d_match = re.search(r"Variação nos últimos 7 dias: ([0-9,.]+)%", data)
+        
+        if price_match and var_30d_match and var_14d_match and var_7d_match:
+            data = {
+                'price': float(price_match.group(1).replace(',', '')),
+                'var_30d': float(var_30d_match.group(1).replace(',', '')),
+                'var_14d': float(var_14d_match.group(1).replace(',', '')),
+                'var_7d': float(var_7d_match.group(1).replace(',', ''))
+            }
+        else:
+            print("Erro ao processar os dados da string.")
+            return
+    else:
+        print("Erro: O objeto data não é uma string.")
+
+    save_bitcoin_data(data)
+    print(f"Dados do Bitcoin atualizados em {datetime.now(brazil_tz)}")
+    
 def run_conversation():
     print("Iniciando analise do GPT")
     ai_response = Conversation()
@@ -134,7 +135,7 @@ if __name__ == "__main__":
     schedule.every().hour.do(update_operation_data)
     schedule.every().hour.do(calculate_bitcoin_returns)
 
-    schedule.every().minute.do(update_bitcoin_data)
+    schedule.every().hour.do(update_bitcoin_data)
 
     print(f"Servidor de tarefas iniciado. (Horário de Brasília: {datetime.now(brazil_tz)})")
     while True:

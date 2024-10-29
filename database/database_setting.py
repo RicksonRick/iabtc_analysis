@@ -1,11 +1,9 @@
-
 import os
 import psycopg2
 from datetime import datetime, timedelta, timezone
 import requests
 from dotenv import load_dotenv
 
-# Carrega as variáveis de ambiente
 load_dotenv()
 
 def connect_to_db():
@@ -105,12 +103,20 @@ def store_prediction(prompt, response, recommendation, trust_rate, value_btc, st
 def get_bitcoin_data(date):
     """Obtém dados OHLC do Bitcoin da API CoinGecko."""
     print(f"Buscando dados do Bitcoin para a data {date}...")  # Verifica se a função está sendo chamada corretamente
+    api_key = os.getenv('COINGEKO_KEY')
+    
+    headers = {
+        "accept": "application/json",
+        "x-cg-demo-api-key": api_key
+    }
+    
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/ohlc?vs_currency=usd&days=1"
     
     try:
-        response = requests.get(url)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()  # Levanta exceção para códigos de erro HTTP
         data = response.json()
+        print(data)
 
         if data and len(data) > 0:
             open_price = data[0][1]
@@ -145,8 +151,15 @@ def insert_actual_bitcoin_data():
                 cursor.execute('''
                     UPDATE chatbot_data
                     SET btc_high = %s, btc_low = %s, btc_close = %s, btc_open = %s
-                    WHERE prediction_date = %s AND btc_high IS NULL
+                    WHERE id = (
+                        SELECT id FROM chatbot_data 
+                        WHERE prediction_date = %s AND btc_high IS NULL 
+                        ORDER BY id DESC 
+                        LIMIT 1
+                    )
                 ''', (btc_high, btc_low, btc_close, btc_open, yesterday))
+                rows = cursor.fetchall()
+                print("Linhas a serem atualizadas:", rows)
                 affected_rows = cursor.rowcount
                 connection.commit()
                 print(f"Dados reais do Bitcoin inseridos para {yesterday}. Linhas afetadas: {affected_rows}")

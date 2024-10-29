@@ -13,7 +13,8 @@ import logging
 import numpy as np
 import requests
 import matplotlib.pyplot as plt
-
+from dotenv import load_dotenv
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,7 +43,6 @@ def get_bitcoin_data(limit):
         return df
     return None
 
-
 def get_bitcoin_returns(analysis_date):
     # Converter a data de análise para o formato necessário
     analysis_date_str = analysis_date.strftime("%d-%m-%Y")
@@ -53,7 +53,12 @@ def get_bitcoin_returns(analysis_date):
     
     # Fazer a chamada à API do CoinGecko
     url = f"https://api.coingecko.com/api/v3/coins/bitcoin/history?date={analysis_date_str}"
-    response = requests.get(url)
+    api_key = os.getenv('COINGEKO_KEY')
+    headers = {
+        "accept": "application/json",
+        "x-cg-demo-api-key": api_key
+    }
+    response = requests.get(url, headers=headers, verify=False, timeout=10)
     
     if response.status_code == 200:
         data = response.json()
@@ -61,7 +66,12 @@ def get_bitcoin_returns(analysis_date):
         
         # Obter o preço do dia anterior
         url_previous = f"https://api.coingecko.com/api/v3/coins/bitcoin/history?date={previous_date_str}"
-        response_previous = requests.get(url_previous)
+        api_key = os.getenv('COINGEKO_KEY')
+        headers = {
+            "accept": "application/json",
+            "x-cg-demo-api-key": api_key
+        }
+        response_previous = requests.get(url_previous, headers=headers, verify=False, timeout=10)
         
         if response_previous.status_code == 200:
             data_previous = response_previous.json()
@@ -99,6 +109,7 @@ def calculate_trade_returns():
         prediction_date
     """
     df = pd.read_sql_query(query, connection)
+    print(df)
     connection.close()
     
     # Standardize the recommendation strings
@@ -153,7 +164,7 @@ def calculate_trade_returns():
                         print(f"Entered Position: {position} at {entry_price}")
                 else:
                     # Only close the position; do not open a new one until current is closed
-                    if position == 'compra':
+                    if position.lower() == 'compra':
                         if pd.isna(close):
                             # Cannot close position, keep it open
                             print(f"Cannot close 'compra' position on {current_date.date()} due to NaN close price.")
@@ -213,6 +224,7 @@ def calculate_trade_returns():
     
     # Convert to DataFrame
     df_returns = pd.DataFrame(trade_returns)
+    print(df_returns)
     
     return df_returns
 
@@ -269,10 +281,6 @@ def calculate_btc_cumulative_return():
         previous_price = current_price
 
     return results
-
-
-
-
 
 def prepare_data_for_graph(ai_returns, btc_returns):
     ai_df = pd.DataFrame(ai_returns)
@@ -335,7 +343,6 @@ def display_comparison_graph(ai_returns, btc_returns):
 
     st.plotly_chart(fig)
 
-
 def get_gpt_analysis():
     connection = connect_to_db()
     query = """
@@ -379,7 +386,13 @@ def get_gpt_analysis():
 def display_bitcoin_data():
     # Fetch Bitcoin data from CoinGecko API
     url = "https://api.coingecko.com/api/v3/coins/bitcoin"
-    response = requests.get(url)
+    api_key = os.getenv('COINGEKO_KEY')
+    headers = {
+        "accept": "application/json",
+        "x-cg-demo-api-key": api_key
+    }
+    response = requests.get(url, headers=headers, verify=False, timeout=10)
+    print(f"DISPLAY BTC DATA {response.json}")
     
     if response.status_code == 200:
         data = response.json()
@@ -414,7 +427,12 @@ def display_bitcoin_data():
         
         # Fetch historical data to calculate median volume
         historical_url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30&interval=daily"
-        historical_response = requests.get(historical_url)
+        api_key = os.getenv('COINGEKO_KEY')
+        headers = {
+            "accept": "application/json",
+            "x-cg-demo-api-key": api_key
+        }
+        historical_response = requests.get(historical_url, headers=headers, verify=False, timeout=10)
         if historical_response.status_code == 200:
             historical_data = historical_response.json()
             volumes = [v[1] for v in historical_data['total_volumes']]
@@ -433,12 +451,10 @@ def display_bitcoin_data():
             st.metric(label="Volume de Negociação 24h", value=f"${total_volume:,.0f}")
             st.warning("Não foi possível calcular o volume médio.")
         
-        # Additional data
         st.subheader("Informações Adicionais")
         col1, col2 = st.columns(2)
         col1.write(f"Máxima Histórica: ${data['market_data']['ath']['usd']:,.2f}")
         
-        # Last updated timestamp
         last_updated = datetime.fromisoformat(data['last_updated'].replace('Z', '+00:00'))
         st.write(f"Última Atualização: {last_updated.strftime('%d/%m/%Y %H:%M:%S')} UTC")
     else:
