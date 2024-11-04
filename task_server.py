@@ -1,15 +1,16 @@
 import schedule
 import time
 import pytz
+import re
+import json
+import threading
 from datetime import datetime, timedelta
 from chatbot.chatbot_v3 import Conversation
 from database.database_setting import insert_actual_bitcoin_data, connect_to_db
 from analysis.exec_script import get_bitcoin_price_and_variation
 import pandas as pd
-import threading
-import json
 from webhook import enviar_dados_para_urls, get_bitcoin_data
-import re
+
 
 brazil_tz = pytz.timezone('America/Sao_Paulo')
 
@@ -128,10 +129,14 @@ def run_conversation():
     print(f"Análise GPT executada em {datetime.now(brazil_tz)}, {response}")
 
 if __name__ == "__main__":
-    schedule_next_run(run_conversation, datetime.now(brazil_tz).replace(hour=21, minute=0))
-    schedule_next_run(insert_actual_bitcoin_data, datetime.now(brazil_tz).replace(hour=21, minute=5))
-    schedule_next_run(enviar_dados_para_urls, datetime.now(brazil_tz).replace(hour=21, minute=15))
-
+    schedule.every().day.at("21:00").do(run_conversation)
+    schedule.every().day.at("21:05").do(insert_actual_bitcoin_data)
+    schedule.every().day.at("21:15").do(enviar_dados_para_urls)
+    
+    print("iniciando GPT")
+    #run_conversation()
+    print("finalizado gpt")
+    
     schedule.every().hour.do(update_operation_data)
     schedule.every().hour.do(calculate_bitcoin_returns)
 
