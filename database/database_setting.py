@@ -59,7 +59,7 @@ def create_db():
         connection.close()
 
 def store_prediction(prompt, response, recommendation, trust_rate, value_btc, stop_loss, take_profit, risk_return, btc_high, btc_low, btc_close, btc_open, actual_date):
-    """Armazena a previsão no banco de dados, incluindo o prompt e a resposta da API."""
+    """Armazena a previsão no banco de dados, incluindo o prompt e a resposta da API, garantindo que o id seja sequencial."""
     connection = connect_to_db()
     if connection is None:
         print("Conexão ao banco de dados falhou. Abortando inserção.")
@@ -69,14 +69,18 @@ def store_prediction(prompt, response, recommendation, trust_rate, value_btc, st
         prediction_date = datetime.now(timezone.utc).date()
 
         with connection.cursor() as cursor:
+            cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM chatbot_data")
+            next_id = cursor.fetchone()[0]
+
             cursor.execute('''
                 INSERT INTO chatbot_data (
-                    datetime, prompt, response, recommendation, trust_rate, value_btc, stop_loss, 
+                    id, datetime, prompt, response, recommendation, trust_rate, value_btc, stop_loss, 
                     take_profit, risk_return, btc_high, btc_low, btc_close, btc_open, 
                     prediction_date, actual_date
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (
+                next_id,
                 datetime.now(timezone.utc),
                 prompt,
                 response,
@@ -94,11 +98,12 @@ def store_prediction(prompt, response, recommendation, trust_rate, value_btc, st
                 actual_date
             ))
             connection.commit()
-            print(f"Previsão armazenada com sucesso para {actual_date}.")
+            print(f"Previsão armazenada com sucesso para {actual_date} com id {next_id}.")
     except Exception as e:
         print(f"Erro ao inserir dados no banco de dados: {e}")
     finally:
         connection.close()
+
 
 def get_bitcoin_data(date):
     """Obtém dados OHLC do Bitcoin da API CoinGecko."""
