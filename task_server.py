@@ -203,3 +203,5 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"Erro no loop principal: {str(e)}")
             time.sleep(5)
+            
+            

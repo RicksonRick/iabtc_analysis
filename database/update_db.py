@@ -1,5 +1,6 @@
 from psycopg2 import sql
-from BTC_analysis.database.database_setting import connect_to_db
+from database.database_setting import connect_to_db
+from typing import Union
 
 def update_db():
     connection = connect_to_db()
@@ -51,19 +52,26 @@ from datetime import datetime
 import json
 from psycopg2.extras import Json
 from typing import Dict, Any
-from BTC_analysis.database.database_setting import connect_to_db
+from database.database_setting import connect_to_db
 
-def save_4h_analysis(analyzed_data: Dict[str, Any]) -> bool:
+from datetime import datetime, timezone
+import json
+from typing import Dict, Any
+
+def save_4h_analysis(analyzed_data: Union[str, dict]) -> bool:
     """
     Salva os resultados da análise do bot 4H no banco de dados.
     
     Args:
-        analyzed_data: Dicionário contendo os dados da análise
+        analyzed_data: String JSON ou dicionário contendo os dados da análise
     
     Returns:
         bool: True se salvou com sucesso, False caso contrário
     """
     try:
+        # Converte para dicionário se for string JSON
+        data = json.loads(analyzed_data) if isinstance(analyzed_data, str) else analyzed_data
+        
         connection = connect_to_db()
         with connection.cursor() as cursor:
             query = """
@@ -81,28 +89,28 @@ def save_4h_analysis(analyzed_data: Dict[str, Any]) -> bool:
             """
             
             cursor.execute(query, (
-                datetime.now(),
-                analyzed_data['recommended_action'],
-                analyzed_data['justification'],
-                analyzed_data['stop_loss'],
-                analyzed_data['take_profit'],
-                analyzed_data['attention_points'],
-                Json(analyzed_data)  # Armazena o JSON completo
+                datetime.now(timezone.utc),
+                data['recommended_action'],
+                data['justification'],
+                data['stop_loss'],
+                data['take_profit'],
+                data['attention_points'],
+                analyzed_data if isinstance(analyzed_data, str) else json.dumps(data)
             ))
             
             new_id = cursor.fetchone()[0]
             connection.commit()
-            print(f"Análise salva com sucesso. ID: {new_id}")
+            print(f"Análise 4H salva com sucesso. ID: {new_id}")
             return True
             
     except Exception as e:
         print(f"Erro ao salvar análise no banco de dados: {e}")
-        if connection:
+        if 'connection' in locals() and connection:
             connection.rollback()
         return False
         
     finally:
-        if connection:
+        if 'connection' in locals() and connection:
             connection.close()
 
 def get_latest_analysis() -> Dict[str, Any]:

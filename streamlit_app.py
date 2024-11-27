@@ -13,6 +13,7 @@ import logging
 import numpy as np
 import requests
 import matplotlib.pyplot as plt
+import hashlib
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -21,6 +22,18 @@ logger = logging.getLogger(__name__)
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 st.set_page_config(page_title="GPT_BTC", page_icon="🪙", layout="centered")
 brazil_tz = pytz.timezone('America/Sao_Paulo')
+
+def verify_login(email, password):
+    connection = connect_to_db()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, name FROM users WHERE email = %s AND password_hash = %s",
+                (email, hashlib.sha256(password.encode()).hexdigest())
+            )
+            return cursor.fetchone()
+    finally:
+        connection.close()
 
 def format_time(dt):
     return dt.strftime('%H:%M:%S')
@@ -447,168 +460,7 @@ def get_gpt_analysis():
         return result
     else:
         return None
-
-def display_bitcoin_data():
-    # Fetch Bitcoin data from CoinGecko API
-    url = "https://api.coingecko.com/api/v3/coins/bitcoin"
-    api_key = os.getenv('COINGEKO_KEY')
-    headers = {
-        "accept": "application/json",
-        "x-cg-demo-api-key": api_key
-    }
-    response = requests.get(url, headers=headers, verify=False, timeout=10)
-    print(f"DISPLAY BTC DATA {response.json}")
     
-    if response.status_code == 200:
-        data = response.json()
-        
-        # Extract relevant information
-        current_price = data['market_data']['current_price']['usd']
-        market_cap = data['market_data']['market_cap']['usd']
-        total_volume = data['market_data']['total_volume']['usd']
-        price_change_24h = data['market_data']['price_change_percentage_24h']
-        price_change_7d = data['market_data']['price_change_percentage_7d']
-        price_change_30d = data['market_data']['price_change_percentage_30d']
-        
-        # Helper function to create color-coded delta strings with arrows
-        def format_delta(value):
-            color = "green" if value > 0 else "red"
-            arrow = "↑" if value > 0 else "↓"
-            return f"<span style='color: {color};'>{value:.2f}% {arrow}</span>"
-        
-        # Display data
-        col1, col2 = st.columns(2)
-        
-        col1.metric(label="Preço Atual", value=f"${current_price:,.2f}", 
-                    delta=price_change_24h,
-                    delta_color="normal")
-        col2.metric(label="Capitalização de Mercado", value=f"${market_cap:,.0f}")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        col1.markdown(f"*Variação 24h*\n{format_delta(price_change_24h)}", unsafe_allow_html=True)
-        col2.markdown(f"*Variação 7d*\n{format_delta(price_change_7d)}", unsafe_allow_html=True)
-        col3.markdown(f"*Variação 30d*\n{format_delta(price_change_30d)}", unsafe_allow_html=True)
-        
-        # Fetch historical data to calculate median volume
-        historical_url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30&interval=daily"
-        api_key = os.getenv('COINGEKO_KEY')
-        headers = {
-            "accept": "application/json",
-            "x-cg-demo-api-key": api_key
-        }
-        historical_response = requests.get(historical_url, headers=headers, verify=False, timeout=10)
-        if historical_response.status_code == 200:
-            historical_data = historical_response.json()
-            volumes = [v[1] for v in historical_data['total_volumes']]
-            median_volume = sorted(volumes)[len(volumes)//2]
-        
-            volume_color = "red" if total_volume < median_volume else "green"
-            volume_arrow = "↓" if total_volume < median_volume else "↑"
-        
-            st.markdown("*Volume de Negociação 24h*")
-            st.markdown(f"${total_volume:,.0f}")
-            st.markdown(
-                f"<span style='color: {volume_color};'>Mediana 30d: ${median_volume:,.0f} {volume_arrow}</span>",
-                unsafe_allow_html=True
-            )
-        else:
-            st.metric(label="Volume de Negociação 24h", value=f"${total_volume:,.0f}")
-            st.warning("Não foi possível calcular o volume médio.")
-        
-        st.subheader("Informações Adicionais")
-        col1, col2 = st.columns(2)
-        col1.write(f"Máxima Histórica: ${data['market_data']['ath']['usd']:,.2f}")
-        
-        last_updated = datetime.fromisoformat(data['last_updated'].replace('Z', '+00:00'))
-        st.write(f"Última Atualização: {last_updated.strftime('%d/%m/%Y %H:%M:%S')} UTC")
-    else:
-        st.error("Falha ao obter dados do Bitcoin da API CoinGecko.")
-
-def display_next_updates():
-    st.header("Próximas Atualizações")
-    col1, col2, col3, col4 = st.columns(4)
-    now = datetime.now(brazil_tz)
-    
-    col1.metric("Próxima Análise GPT", 
-                format_time(now.replace(hour=21, minute=0, second=0, microsecond=0) + timedelta(days=1 if now.hour >= 21 else 0)))
-    col2.metric("Próxima Inserção de Dados BTC", 
-                format_time(now.replace(hour=21, minute=5, second=0, microsecond=0) + timedelta(days=1 if now.hour >= 21 else 0)))
-    col3.metric("Próxima Atualização de Operações", 
-                format_time((now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)))
-    col4.metric("Próxima Atualização de Dados BTC", 
-                format_time((now + timedelta(minutes=1)).replace(second=0, microsecond=0)))
-
-def display_chart(operation_data, btc_data):
-    st.header("Comparação de Rentabilidade")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=operation_data['prediction_date'], y=operation_data['avg_risk_return'], 
-                             mode='lines', name='Rentabilidade das Operações'))
-    fig.add_trace(go.Scatter(x=btc_data['date'], y=btc_data['cumulative_return'], 
-                             mode='lines', name='Rentabilidade do Bitcoin'))
-    fig.update_layout(title='Comparação de Rentabilidade: Operações vs Bitcoin',
-                      xaxis_title='Data', yaxis_title='Retorno Cumulativo')
-    st.plotly_chart(fig)
-
-st.image("image_btc.jpg", use_column_width=True)
-st.title("📈 GPT Analista de BTC")
-
-# Descrição com markdown e CSS
-st.markdown("""
-<style>
-    .main-description {
-        font-size: 18px;
-        font-weight: 500;
-        line-height: 1.6;
-    }
-</style>
-<div class="main-description">
-    Um chatbot inteligente especializado em análise de Bitcoin para operações de swing trading. 
-    Ele utiliza dados em tempo real de derivativos, on-chain, análise técnica e macroeconômica para fornecer previsões dinâmicas e recomendações ajustadas conforme as condições do mercado.
-</div>
-""", unsafe_allow_html=True)
-
-bitcoin_data = get_bitcoin_data(30)
-
-st.write("## Dados do Bitcoin")
-if bitcoin_data is not None:
-    display_bitcoin_data()
-else:
-    st.error("Dados do Bitcoin não disponíveis no momento.")
-
-display_next_updates()
-
-df_returns = calculate_trade_returns()
-
-ai_returns = plot_cumulative_returns(df_returns)
-btc_returns = calculate_btc_cumulative_return()
-display_comparison_graph(ai_returns, btc_returns)
-
-st.header("Última Análise GPT")
-gpt_analysis = get_gpt_analysis()
-
-if gpt_analysis is not None:
-    st.text(f"Última análise realizada em: {gpt_analysis['datetime']}")
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Recomendação", gpt_analysis['recommendation'].strip())
-    col2.metric("Taxa de Confiança", f"{gpt_analysis['trust_rate']:.2f}%")
-    col3.metric("Valor de Entrada", f"${gpt_analysis['value_btc']:.2f}")  # Novo campo Valor de Entrada
-    
-    col4, col5, col6 = st.columns(3)
-    col4.metric("Stop Loss", f"{gpt_analysis['stop_loss']:.2f}")
-    col5.metric("Take Profit", f"{gpt_analysis['take_profit']:.2f}")
-    col6.metric("Retorno de Risco", gpt_analysis['risk_return'])  # Exibindo como string
-    
-    response_content = gpt_analysis['response']
-
-    st.chat_message("ai").write(response_content)
-    # Explicação adicional do Retorno de Risco
-    risk_return_parts = gpt_analysis['risk_return'].split(':')
-
-else:
-    st.write("Nenhuma análise disponível com todos os dados necessários.")
-
 def get_bitcoin_data_from_db():
     connection = connect_to_db()
     
@@ -742,20 +594,309 @@ def get_bitcoin_data_from_db():
 
     return df
 
-# Obtenha os dados do banco
-df = get_bitcoin_data_from_db()
+def display_bitcoin_data():
+    # Fetch Bitcoin data from CoinGecko API
+    url = "https://api.coingecko.com/api/v3/coins/bitcoin"
+    api_key = os.getenv('COINGEKO_KEY')
+    headers = {
+        "accept": "application/json",
+        "x-cg-demo-api-key": api_key
+    }
+    response = requests.get(url, headers=headers, verify=False, timeout=10)
+    print(f"DISPLAY BTC DATA {response.json}")
+    
+    if response.status_code == 200:
+        data = response.json()
+        
+        # Extract relevant information
+        current_price = data['market_data']['current_price']['usd']
+        market_cap = data['market_data']['market_cap']['usd']
+        total_volume = data['market_data']['total_volume']['usd']
+        price_change_24h = data['market_data']['price_change_percentage_24h']
+        price_change_7d = data['market_data']['price_change_percentage_7d']
+        price_change_30d = data['market_data']['price_change_percentage_30d']
+        
+        # Helper function to create color-coded delta strings with arrows
+        def format_delta(value):
+            color = "green" if value > 0 else "red"
+            arrow = "↑" if value > 0 else "↓"
+            return f"<span style='color: {color};'>{value:.2f}% {arrow}</span>"
+        
+        # Display data
+        col1, col2 = st.columns(2)
+        
+        col1.metric(label="Preço Atual", value=f"${current_price:,.2f}", 
+                    delta=price_change_24h,
+                    delta_color="normal")
+        col2.metric(label="Capitalização de Mercado", value=f"${market_cap:,.0f}")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        col1.markdown(f"*Variação 24h*\n{format_delta(price_change_24h)}", unsafe_allow_html=True)
+        col2.markdown(f"*Variação 7d*\n{format_delta(price_change_7d)}", unsafe_allow_html=True)
+        col3.markdown(f"*Variação 30d*\n{format_delta(price_change_30d)}", unsafe_allow_html=True)
+        
+        # Fetch historical data to calculate median volume
+        historical_url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30&interval=daily"
+        api_key = os.getenv('COINGEKO_KEY')
+        headers = {
+            "accept": "application/json",
+            "x-cg-demo-api-key": api_key
+        }
+        historical_response = requests.get(historical_url, headers=headers, verify=False, timeout=10)
+        if historical_response.status_code == 200:
+            historical_data = historical_response.json()
+            volumes = [v[1] for v in historical_data['total_volumes']]
+            median_volume = sorted(volumes)[len(volumes)//2]
+        
+            volume_color = "red" if total_volume < median_volume else "green"
+            volume_arrow = "↓" if total_volume < median_volume else "↑"
+        
+            st.markdown("*Volume de Negociação 24h*")
+            st.markdown(f"${total_volume:,.0f}")
+            st.markdown(
+                f"<span style='color: {volume_color};'>Mediana 30d: ${median_volume:,.0f} {volume_arrow}</span>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.metric(label="Volume de Negociação 24h", value=f"${total_volume:,.0f}")
+            st.warning("Não foi possível calcular o volume médio.")
+        
+        st.subheader("Informações Adicionais")
+        col1, col2 = st.columns(2)
+        col1.write(f"Máxima Histórica: ${data['market_data']['ath']['usd']:,.2f}")
+        
+        last_updated = datetime.fromisoformat(data['last_updated'].replace('Z', '+00:00'))
+        st.write(f"Última Atualização: {last_updated.strftime('%d/%m/%Y %H:%M:%S')} UTC")
+    else:
+        st.error("Falha ao obter dados do Bitcoin da API CoinGecko.")
 
-# Exiba o DataFrame no Streamlit com navegação
-st.write("Tabela com histórico")
-st.dataframe(df, height=400)  # Define a altura para permitir rolagem
+def display_next_updates():
+    st.header("Próximas Atualizações")
+    col1, col2, col3, col4 = st.columns(4)
+    now = datetime.now(brazil_tz)
+    
+    col1.metric("Próxima Análise GPT", 
+                format_time(now.replace(hour=21, minute=0, second=0, microsecond=0) + timedelta(days=1 if now.hour >= 21 else 0)))
+    col2.metric("Próxima Inserção de Dados BTC", 
+                format_time(now.replace(hour=21, minute=5, second=0, microsecond=0) + timedelta(days=1 if now.hour >= 21 else 0)))
+    col3.metric("Próxima Atualização de Operações", 
+                format_time((now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)))
+    col4.metric("Próxima Atualização de Dados BTC", 
+                format_time((now + timedelta(minutes=1)).replace(second=0, microsecond=0)))
 
-if 'update_counter' not in st.session_state:
-    st.session_state.update_counter = 0
+def display_chart(operation_data, btc_data):
+    st.header("Comparação de Rentabilidade")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=operation_data['prediction_date'], y=operation_data['avg_risk_return'], 
+                             mode='lines', name='Rentabilidade das Operações'))
+    fig.add_trace(go.Scatter(x=btc_data['date'], y=btc_data['cumulative_return'], 
+                             mode='lines', name='Rentabilidade do Bitcoin'))
+    fig.update_layout(title='Comparação de Rentabilidade: Operações vs Bitcoin',
+                      xaxis_title='Data', yaxis_title='Retorno Cumulativo')
+    st.plotly_chart(fig)
+    
+def get_latest_4h_analysis():
+    """Obtém a análise mais recente do bot 4h do banco de dados"""
+    try:
+        connection = connect_to_db()
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT analysis_datetime, recommended_action, justification,
+                       stop_loss, take_profit, attention_points
+                FROM bot_4h_analysis
+                ORDER BY analysis_datetime DESC
+                LIMIT 1
+            """)
+            result = cursor.fetchone()
+            
+            if result:
+                return {
+                    'datetime': result[0],
+                    'action': result[1],
+                    'justification': result[2],
+                    'stop_loss': result[3],
+                    'take_profit': result[4],
+                    'attention_points': result[5]
+                }
+            return None
+    except Exception as e:
+        print(f"Erro ao obter análise 4h: {e}")
+        return None
+    finally:
+        if connection:
+            connection.close()
 
-st.session_state.update_counter += 1
+def display_4h_analysis():
+    st.header("🤖 Análise Bot 4 Horas")
+    
+    analysis = get_latest_4h_analysis()
+    
+    if analysis:
+        # Estilização CSS
+        st.markdown("""
+            <style>
+                .analysis-box {
+                    padding: 20px;
+                    border-radius: 10px;
+                    background-color: #f0f2f6;
+                    margin-bottom: 20px;
+                }
+                .timestamp {
+                    color: #666;
+                    font-size: 0.9em;
+                }
+                .action-label {
+                    font-weight: bold;
+                    color: #1e88e5;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        # Timestamp da análise
+        st.markdown(f"<p class='timestamp'>Última atualização: {analysis['datetime'].strftime('%d/%m/%Y %H:%M:%S UTC')}</p>", 
+                   unsafe_allow_html=True)
+        
+        # Ação Recomendada e Justificativa
+        col1, col2, col3 = st.columns([1,1,1])
+        
+        with col1:
+            st.metric("Ação Recomendada", analysis['action'])
+        
+        with col2:
+            st.metric("Stop Loss", f"${analysis['stop_loss']:,.2f}")
+            
+        with col3:
+            st.metric("Take Profit", f"${analysis['take_profit']:,.2f}")
+        
+        # Justificativa em um box destacado
+        st.markdown("<div class='analysis-box'>", unsafe_allow_html=True)
+        st.markdown("#### 📝 Justificativa")
+        st.write(analysis['justification'])
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Pontos de Atenção
+        st.markdown("#### 🎯 Pontos de Atenção")
+        for point in analysis['attention_points']:
+            st.markdown(f"- {point}")
+            
+    else:
+        st.error("Não foi possível carregar a análise mais recente do bot 4h.")
 
-if st.session_state.update_counter >= 60:
-    st.session_state.update_counter = 0
-    st.rerun()
+def main():
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
 
-st.empty().text(f"Próxima atualização em {60 - st.session_state.update_counter} segundos")
+    st.sidebar.title("Bem-vindo!")
+    
+    if not st.session_state.logged_in:
+        email = st.sidebar.text_input("Email")
+        password = st.sidebar.text_input("Senha", type="password")
+        login_button = st.sidebar.button('Login')
+        
+        st.markdown("""
+            <style>
+                .centralize {
+                    text-align: center;
+                }
+                .spacer {
+                    margin-bottom: 20px;
+                }
+            </style>
+            <div class='centralize spacer'>
+                <h2>Faça Login na sua conta e aproveite a melhor IA de análise de crypto do MUNDO!</h2>
+            </div>
+            <div class='centralize'>
+                <p>🚀 Não se esqueça de ficar de olho no discord!</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        if login_button:
+            user = verify_login(email, password)
+            if user:
+                st.session_state.logged_in = True
+                st.session_state.user_id = user[0]
+                st.session_state.user_name = user[1]
+                st.rerun()
+            else:
+                st.sidebar.error("Credenciais inválidas")
+
+    else:
+        # Botão de logout
+        if st.sidebar.button('Logout'):
+            st.session_state.logged_in = False
+            st.experimental_rerun()
+            
+        # Conteúdo principal após login
+        st.image("image_btc.jpg", use_column_width=True)
+        st.title("📈 GPT Analista de BTC")
+
+        st.markdown("""
+        <style>
+            .main-description {
+                font-size: 18px;
+                font-weight: 500;
+                line-height: 1.6;
+            }
+        </style>
+        <div class="main-description">
+            Um chatbot inteligente especializado em análise de Bitcoin para operações de swing trading. 
+            Ele utiliza dados em tempo real de derivativos, on-chain, análise técnica e macroeconômica para fornecer previsões dinâmicas e recomendações ajustadas conforme as condições do mercado.
+        </div>
+        """, unsafe_allow_html=True)
+
+        bitcoin_data = get_bitcoin_data(30)
+
+        st.write("## Dados do Bitcoin")
+        if bitcoin_data is not None:
+            display_bitcoin_data()
+        else:
+            st.error("Dados do Bitcoin não disponíveis no momento.")
+
+        display_next_updates()
+
+        df_returns = calculate_trade_returns()
+        ai_returns = plot_cumulative_returns(df_returns)
+        btc_returns = calculate_btc_cumulative_return()
+        display_comparison_graph(ai_returns, btc_returns)
+
+        st.header("Última Análise GPT")
+        gpt_analysis = get_gpt_analysis()
+
+        if gpt_analysis is not None:
+            st.text(f"Última análise realizada em: {gpt_analysis['datetime']}")
+    
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Recomendação", gpt_analysis['recommendation'].strip())
+            col2.metric("Taxa de Confiança", f"{gpt_analysis['trust_rate']:.2f}%")
+            col3.metric("Valor de Entrada", f"${gpt_analysis['value_btc']:.2f}")
+    
+            col4, col5, col6 = st.columns(3)
+            col4.metric("Stop Loss", f"{gpt_analysis['stop_loss']:.2f}")
+            col5.metric("Take Profit", f"{gpt_analysis['take_profit']:.2f}")
+            col6.metric("Retorno de Risco", gpt_analysis['risk_return'])
+    
+            response_content = gpt_analysis['response']
+            st.chat_message("ai").write(response_content)
+            risk_return_parts = gpt_analysis['risk_return'].split(':')
+        else:
+            st.write("Nenhuma análise disponível com todos os dados necessários.")
+
+        df = get_bitcoin_data_from_db()
+        display_4h_analysis()
+        st.write("Tabela com histórico")
+        st.dataframe(df, height=400)
+
+        if 'update_counter' not in st.session_state:
+            st.session_state.update_counter = 0
+
+        st.session_state.update_counter += 1
+
+        if st.session_state.update_counter >= 60:
+            st.session_state.update_counter = 0
+            st.rerun()
+
+        st.empty().text(f"Próxima atualização em {60 - st.session_state.update_counter} segundos")
+
+if __name__ == "__main__":
+    main()

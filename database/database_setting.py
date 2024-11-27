@@ -232,5 +232,32 @@ def setup_4h_bot_table():
     finally:
         connection.close()
 
+def setup_users_table():
+    connection = connect_to_db()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    phone VARCHAR(20),
+                    email VARCHAR(100) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_users_email 
+                ON users(email);
+            """)
+        connection.commit()
+    finally:
+        connection.close()
+        
+import hashlib
+import streamlit as st
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+        
 if __name__ == "__main__":
-    setup_4h_bot_table()
+    setup_users_table()
