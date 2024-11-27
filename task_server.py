@@ -184,12 +184,6 @@ if __name__ == "__main__":
     
     # Execução inicial dos bots
     logging.info("Executando análises iniciais")
-    try:
-        run_conversation()
-        run_4h_bot()  # Executa o bot 4h também na inicialização
-        logging.info("Análises iniciais concluídas")
-    except Exception as e:
-        logging.error(f"Erro nas análises iniciais: {str(e)}")
     
     logging.info(f"Servidor de tarefas iniciado. (Horário de Brasília: {datetime.now(brazil_tz)})")
     
