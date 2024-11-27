@@ -9,11 +9,21 @@ from chatbot.chatbot_v3 import Conversation
 from database.database_setting import insert_actual_bitcoin_data, connect_to_db
 from analysis.exec_script import get_bitcoin_price_and_variation
 import pandas as pd
+import logging
 from webhook import enviar_dados_para_urls, get_bitcoin_data
 
 
-brazil_tz = pytz.timezone('America/Sao_Paulo')
+# Configuração de logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('task_server.log'),
+        logging.StreamHandler()
+    ]
+)
 
+brazil_tz = pytz.timezone('America/Sao_Paulo')
 
 def update_operation_data():
     connection = connect_to_db()
@@ -127,22 +137,75 @@ def run_conversation():
     save_gpt_analysis(response)
     print(response)
     print(f"Análise GPT executada em {datetime.now(brazil_tz)}, {response}")
+    
+def run_4h_bot():
+    print("Iniciando Bot 4h")
+    bot_4h_response = Conversation()
+    response = bot_4h_response.send()
+    print (response)
+
+def job_wrapper(func):
+    """Wrapper para garantir que as tarefas continuem executando mesmo com erros"""
+    def wrapped():
+        try:
+            logging.info(f"Iniciando tarefa: {func.__name__}")
+            func()
+            logging.info(f"Tarefa concluída: {func.__name__}")
+        except Exception as e:
+            logging.error(f"Erro na execução de {func.__name__}: {str(e)}")
+    return wrapped
+
+def initialize_scheduler():
+    """Inicializa todas as tarefas agendadas"""
+    # Tarefas diárias existentes
+    schedule.every().day.at("21:00").do(job_wrapper(run_conversation))
+    schedule.every().day.at("21:05").do(job_wrapper(insert_actual_bitcoin_data))
+    schedule.every().day.at("21:15").do(job_wrapper(enviar_dados_para_urls))
+    
+    # Bot 4h - executa 5 vezes ao dia
+    schedule.every().day.at("04:00").do(job_wrapper(run_4h_bot))
+    schedule.every().day.at("08:00").do(job_wrapper(run_4h_bot))
+    schedule.every().day.at("12:00").do(job_wrapper(run_4h_bot))
+    schedule.every().day.at("16:00").do(job_wrapper(run_4h_bot))
+    schedule.every().day.at("20:00").do(job_wrapper(run_4h_bot))
+    
+    # Tarefas horárias existentes
+    schedule.every().hour.do(job_wrapper(update_operation_data))
+    schedule.every().hour.do(job_wrapper(calculate_bitcoin_returns))
+    schedule.every().hour.do(job_wrapper(update_bitcoin_data))
+    
+    logging.info("Todas as tarefas foram agendadas com sucesso")
 
 if __name__ == "__main__":
-    schedule.every().day.at("21:00").do(run_conversation)
-    schedule.every().day.at("21:05").do(insert_actual_bitcoin_data)
-    schedule.every().day.at("21:15").do(enviar_dados_para_urls)
+    logging.info("Iniciando servidor de tarefas")
     
-    print("iniciando GPT")
-    #run_conversation()
-    print("finalizado gpt")
+    # Inicializa o scheduler
+    initialize_scheduler()
     
-    schedule.every().hour.do(update_operation_data)
-    schedule.every().hour.do(calculate_bitcoin_returns)
-
-    schedule.every().hour.do(update_bitcoin_data)
-
-    print(f"Servidor de tarefas iniciado. (Horário de Brasília: {datetime.now(brazil_tz)})")
+    # Execução inicial dos bots
+    logging.info("Executando análises iniciais")
+    try:
+        run_conversation()
+        run_4h_bot()  # Executa o bot 4h também na inicialização
+        logging.info("Análises iniciais concluídas")
+    except Exception as e:
+        logging.error(f"Erro nas análises iniciais: {str(e)}")
+    
+    logging.info(f"Servidor de tarefas iniciado. (Horário de Brasília: {datetime.now(brazil_tz)})")
+    
+    # Loop principal com tratamento de erros
     while True:
-        schedule.run_pending()
-        time.sleep(1)
+        try:
+            schedule.run_pending()
+            
+            # Log das próximas tarefas (a cada hora)
+            if datetime.now().minute == 0:
+                next_task = schedule.next_run()
+                if next_task:
+                    logging.info(f"Próxima tarefa agendada para: {next_task.astimezone(brazil_tz)}")
+            
+            time.sleep(1)
+            
+        except Exception as e:
+            logging.error(f"Erro no loop principal: {str(e)}")
+            time.sleep(5)

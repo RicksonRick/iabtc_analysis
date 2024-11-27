@@ -174,3 +174,63 @@ def insert_actual_bitcoin_data():
         print(f"Erro ao inserir dados do Bitcoin: {e}")
     finally:
         connection.close()
+
+def setup_4h_bot_table():
+    """
+    Cria e configura a tabela para o bot de análise de 4 horas
+    """
+    connection = connect_to_db()
+    try:
+        with connection.cursor() as cursor:
+            # Verifica se a tabela existe
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'bot_4h_analysis'
+                );
+            """)
+            table_exists = cursor.fetchone()[0]
+            
+            if not table_exists:
+                # Cria a tabela se não existir
+                cursor.execute("""
+                    CREATE TABLE bot_4h_analysis (
+                        id SERIAL PRIMARY KEY,
+                        analysis_datetime TIMESTAMP NOT NULL,
+                        recommended_action VARCHAR(50) NOT NULL,
+                        justification TEXT NOT NULL,
+                        stop_loss NUMERIC NOT NULL,
+                        take_profit NUMERIC NOT NULL,
+                        attention_points TEXT[] NOT NULL,
+                        raw_response JSONB NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                
+                # Cria os índices
+                cursor.execute("""
+                    CREATE INDEX idx_bot_4h_analysis_datetime 
+                    ON bot_4h_analysis(analysis_datetime);
+                """)
+                
+                cursor.execute("""
+                    CREATE INDEX idx_bot_4h_recommended_action 
+                    ON bot_4h_analysis(recommended_action);
+                """)
+                
+                print("Tabela bot_4h_analysis criada com sucesso!")
+            else:
+                print("Tabela bot_4h_analysis já existe.")
+
+        connection.commit()
+        print("Configuração da tabela concluída com sucesso!")
+        
+    except Exception as e:
+        print(f"Erro ao configurar tabela: {e}")
+        connection.rollback()
+        
+    finally:
+        connection.close()
+
+if __name__ == "__main__":
+    setup_4h_bot_table()

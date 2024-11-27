@@ -192,7 +192,7 @@ def run_all_analyses():
 
     return {"results": results, "errors": errors}
 
-#oi = get_bitcoin_price_and_variation()
+#\oi = get_bitcoin_price_and_variation()
 #print(oi)
 #ola = run_all_analyses()
 #print(ola)

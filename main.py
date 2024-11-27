@@ -22,7 +22,13 @@ def should_stop():
 
 def run_task_server():
     print("Iniciando o servidor de tarefas...")
-    return subprocess.Popen([sys.executable, "task_server.py"])
+    while not should_stop():
+        process = subprocess.Popen([sys.executable, "task_server.py"])
+        process.wait()
+        if not should_stop():
+            print("Task server parou inesperadamente. Reiniciando em 5 segundos...")
+            time.sleep(5)
+    return process
 
 def run_streamlit_app():
     print("Iniciando o aplicativo Streamlit...")

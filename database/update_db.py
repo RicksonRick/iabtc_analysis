@@ -46,6 +46,111 @@ def update_db():
         connection.commit()
     connection.close()
     print("Atualização do banco de dados concluída.")
+    
+from datetime import datetime
+import json
+from psycopg2.extras import Json
+from typing import Dict, Any
+from BTC_analysis.database.database_setting import connect_to_db
+
+def save_4h_analysis(analyzed_data: Dict[str, Any]) -> bool:
+    """
+    Salva os resultados da análise do bot 4H no banco de dados.
+    
+    Args:
+        analyzed_data: Dicionário contendo os dados da análise
+    
+    Returns:
+        bool: True se salvou com sucesso, False caso contrário
+    """
+    try:
+        connection = connect_to_db()
+        with connection.cursor() as cursor:
+            query = """
+                INSERT INTO bot_4h_analysis (
+                    analysis_datetime,
+                    recommended_action,
+                    justification,
+                    stop_loss,
+                    take_profit,
+                    attention_points,
+                    raw_response
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s
+                ) RETURNING id;
+            """
+            
+            cursor.execute(query, (
+                datetime.now(),
+                analyzed_data['recommended_action'],
+                analyzed_data['justification'],
+                analyzed_data['stop_loss'],
+                analyzed_data['take_profit'],
+                analyzed_data['attention_points'],
+                Json(analyzed_data)  # Armazena o JSON completo
+            ))
+            
+            new_id = cursor.fetchone()[0]
+            connection.commit()
+            print(f"Análise salva com sucesso. ID: {new_id}")
+            return True
+            
+    except Exception as e:
+        print(f"Erro ao salvar análise no banco de dados: {e}")
+        if connection:
+            connection.rollback()
+        return False
+        
+    finally:
+        if connection:
+            connection.close()
+
+def get_latest_analysis() -> Dict[str, Any]:
+    """
+    Recupera a análise mais recente do banco de dados.
+    
+    Returns:
+        Dict contendo os dados da última análise ou None se houver erro
+    """
+    try:
+        connection = connect_to_db()
+        with connection.cursor() as cursor:
+            query = """
+                SELECT 
+                    analysis_datetime,
+                    recommended_action,
+                    justification,
+                    stop_loss,
+                    take_profit,
+                    attention_points,
+                    raw_response
+                FROM bot_4h_analysis
+                ORDER BY analysis_datetime DESC
+                LIMIT 1;
+            """
+            
+            cursor.execute(query)
+            result = cursor.fetchone()
+            
+            if result:
+                return {
+                    'analysis_datetime': result[0],
+                    'recommended_action': result[1],
+                    'justification': result[2],
+                    'stop_loss': float(result[3]),
+                    'take_profit': float(result[4]),
+                    'attention_points': result[5],
+                    'raw_response': result[6]
+                }
+            return None
+            
+    except Exception as e:
+        print(f"Erro ao recuperar última análise: {e}")
+        return None
+        
+    finally:
+        if connection:
+            connection.close()
 
 # Exemplo de uso
 if __name__ == "__main__":

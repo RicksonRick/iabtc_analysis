@@ -42,7 +42,7 @@ class Conversation:
         
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-2024-08-06",
+                model="gpt-4o-2024-11-20",
                 messages=[{"role": "user", "content": second_prompt}]
             )
             analyzed_data = response.choices[0].message.content
@@ -56,7 +56,7 @@ class Conversation:
         """Calcula a rentabilidade diária com base no preço de abertura e fechamento."""
         if btc_open and btc_close:
             return ((btc_close - btc_open) / btc_open) * 100  # Rentabilidade em porcentagem
-        return None  # Caso os valores sejam None, retorna None
+        return None 
 
     def send(self, analysis_date=None):
         if analysis_date is None:
@@ -72,11 +72,11 @@ class Conversation:
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o-2024-08-06",
+                model="gpt-4o-2024-11-20",
                 messages=messages
             )
             output_from_first_llm = response.choices[0].message.content
-            print("Resposta da primeira LLM:", output_from_first_llm)  # Verifica a resposta da primeira LLM
+            print("Resposta da primeira LLM:", output_from_first_llm) 
         except Exception as e:
             print(f"Erro ao conectar à API da OpenAI: {e}")
             return
