@@ -971,30 +971,27 @@ def get_trade_summary(df):
     # Cria uma cópia do DataFrame para não modificar o original
     df = df.copy()
     
-    # Inicializa listas para armazenar os dados das operações
     trades = []
     current_trade = None
     entry_price = None
     entry_date = None
-    
-    # Itera sobre os dados para encontrar operações
+
     for index, row in df.iterrows():
         if row['Recomendação'] in ['compra', 'venda']:
-            # Se não temos uma operação em andamento, inicia uma nova
             if current_trade is None:
                 current_trade = row['Recomendação']
                 entry_price = row['Preço de Entrada']
                 entry_date = row['datetime']
-            # Se temos uma operação em andamento e a recomendação é diferente
+
             elif row['Recomendação'] != current_trade:
-                # Calcula o retorno da operação
+
                 exit_price = row['btc_close']
                 if current_trade == 'compra':
                     return_pct = ((exit_price - entry_price) / entry_price) * 100
                 else:
                     return_pct = ((entry_price - exit_price) / entry_price) * 100
                 
-                # Adiciona a operação completa à lista
+
                 trades.append({
                     'Data Entrada': entry_date,
                     'Data Saída': row['datetime'],
@@ -1004,13 +1001,12 @@ def get_trade_summary(df):
                     'Retorno (%)': round(return_pct, 2),
                     'Status': 'Fechada'
                 })
-                
-                # Reinicia para nova operação
+
                 current_trade = row['Recomendação']
                 entry_price = row['Preço de Entrada']
                 entry_date = row['datetime']
     
-    # Se existe uma operação em andamento, adiciona ela
+
     if current_trade is not None:
         last_price = df['btc_close'].iloc[-1]
         if current_trade == 'compra':
@@ -1028,17 +1024,14 @@ def get_trade_summary(df):
             'Status': 'Em Andamento'
         })
     
-    # Cria DataFrame com as operações
     trades_df = pd.DataFrame(trades)
     
-    # Formata as colunas
     if not trades_df.empty:
         trades_df['Data Entrada'] = pd.to_datetime(trades_df['Data Entrada']).dt.strftime('%Y-%m-%d %H:%M')
         trades_df['Data Saída'] = pd.to_datetime(trades_df['Data Saída']).dt.strftime('%Y-%m-%d %H:%M')
         trades_df['Preço Entrada'] = trades_df['Preço Entrada'].round(2)
         trades_df['Preço Saída'] = trades_df['Preço Saída'].round(2)
         
-        # Adiciona formatação condicional
         trades_df['Retorno (%)'] = trades_df['Retorno (%)'].apply(
             lambda x: f"+{x:.2f}%" if x > 0 else f"{x:.2f}%"
         )
