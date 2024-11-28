@@ -6,6 +6,7 @@ import json
 import threading
 from datetime import datetime, timedelta
 from chatbot.chatbot_v3 import Conversation
+from bot_4h.bot_4h_chatbot import Conversation4
 from database.database_setting import insert_actual_bitcoin_data, connect_to_db
 from analysis.exec_script import get_bitcoin_price_and_variation
 import pandas as pd
@@ -140,7 +141,7 @@ def run_conversation():
     
 def run_4h_bot():
     print("Iniciando Bot 4h")
-    bot_4h_response = Conversation()
+    bot_4h_response = Conversation4()
     response = bot_4h_response.send()
     print (response)
 
