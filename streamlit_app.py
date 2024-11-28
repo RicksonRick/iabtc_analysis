@@ -334,32 +334,6 @@ def display_comparison_graph(ai_returns, btc_returns):
             hovertemplate='%{y:.2f}%<br>%{x}<extra></extra>'
         ))
 
-    # Adicionar marcadores para sinais
-    if 'position' in operation_data.columns:
-        # Sinais de compra
-        buy_signals = operation_data[operation_data['position'] == 'compra']
-        if not buy_signals.empty:
-            fig.add_trace(go.Scatter(
-                x=buy_signals['prediction_date'],
-                y=buy_signals['cumulative_return'],
-                mode='markers',
-                marker=dict(symbol='triangle-up', size=10, color='#00ff9f'),
-                name='Sinal de Compra',
-                hovertemplate='Compra<br>%{x}<br>Retorno: %{y:.2f}%<extra></extra>'
-            ))
-
-        # Sinais de venda
-        sell_signals = operation_data[operation_data['position'] == 'venda']
-        if not sell_signals.empty:
-            fig.add_trace(go.Scatter(
-                x=sell_signals['prediction_date'],
-                y=sell_signals['cumulative_return'],
-                mode='markers',
-                marker=dict(symbol='triangle-down', size=10, color='#ff4444'),
-                name='Sinal de Venda',
-                hovertemplate='Venda<br>%{x}<br>Retorno: %{y:.2f}%<extra></extra>'
-            ))
-
     # Layout do gráfico (mantido o mesmo estilo Trading View)
     fig.update_layout(
         plot_bgcolor='#131722',
@@ -726,6 +700,36 @@ def get_latest_4h_analysis():
     finally:
         if connection:
             connection.close()
+            
+def get_all_4h_analysis():
+    """Obtém a análise mais recente do bot 4h do banco de dados"""
+    try:
+        connection = connect_to_db()
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT analysis_datetime, recommended_action, justification,
+                       stop_loss, take_profit, attention_points
+                FROM bot_4h_analysis
+                ORDER BY analysis_datetime DESC
+            """)
+            result = cursor.fetchone()
+            
+            if result:
+                return {
+                    'datetime': result[0],
+                    'action': result[1],
+                    'justification': result[2],
+                    'stop_loss': result[3],
+                    'take_profit': result[4],
+                    'attention_points': result[5]
+                }
+            return None
+    except Exception as e:
+        print(f"Erro ao obter análise 4h: {e}")
+        return None
+    finally:
+        if connection:
+            connection.close()
 
 def display_4h_analysis():
     st.header("🤖 Análise Bot 4 Horas")
@@ -782,6 +786,295 @@ def display_4h_analysis():
             
     else:
         st.error("Não foi possível carregar a análise mais recente do bot 4h.")
+
+def normalize_btc_value(value):
+    """
+    Normaliza valores do BTC para diferentes casos.
+    Garante que os valores fiquem no range esperado (próximo a 69000).
+    """
+    if pd.isna(value):
+        return None
+    
+    # Converte para float se for string
+    if isinstance(value, str):
+        value = float(value.replace(',', ''))
+    
+    # Se o valor for muito baixo (como 69.20)
+    if value < 100:
+        return value * 1000
+    # Se o valor for muito alto (como 691962)
+    elif value > 200000:
+        return value / 10
+    
+    return value
+
+def display_btc_price_signals(btc_data, trade_signals):
+    # Pegar dados OHLC do banco
+    connection = connect_to_db()
+    query = """
+    SELECT 
+        DATE(datetime) as date,
+        btc_open,
+        btc_high,
+        btc_low,
+        btc_close,
+        value_btc
+    FROM chatbot_data
+    WHERE btc_open IS NOT NULL 
+    GROUP BY DATE(datetime), btc_open, btc_high, btc_low, btc_close, value_btc
+    ORDER BY DATE(datetime)
+    """
+    candlestick_df = pd.read_sql_query(query, connection)
+    connection.close()
+
+    # Normalizar todos os valores
+    for col in ['btc_open', 'btc_high', 'btc_low', 'btc_close', 'value_btc']:
+        candlestick_df[col] = candlestick_df[col].apply(normalize_btc_value)
+
+    # Converter para DataFrame os dados recebidos
+    trade_df = pd.DataFrame(trade_signals)
+    
+    # Converter datas
+    candlestick_df['date'] = pd.to_datetime(candlestick_df['date'])
+    trade_df['date'] = pd.to_datetime(trade_df['date'])
+
+    fig = go.Figure()
+
+    # Adicionar candlesticks
+    fig.add_trace(go.Candlestick(
+        x=candlestick_df['date'],
+        open=candlestick_df['btc_open'],
+        high=candlestick_df['btc_high'],
+        low=candlestick_df['btc_low'],
+        close=candlestick_df['btc_close'],
+        name='BTC/USD',
+        increasing_line_color='#26a69a',
+        decreasing_line_color='#ef5350',
+        increasing_fillcolor='#26a69a',
+        decreasing_fillcolor='#ef5350'
+    ))
+
+    # Filtrar apenas mudanças de posição
+    position_changes = trade_df[trade_df['position'].shift() != trade_df['position']]
+    position_changes = position_changes.merge(
+        candlestick_df[['date', 'value_btc']], 
+        on='date', 
+        how='left'
+    )
+    
+    # Sinais de compra
+    buy_signals = position_changes[position_changes['position'] == 'compra']
+    if not buy_signals.empty:
+        fig.add_trace(go.Scatter(
+            x=buy_signals['date'],
+            y=buy_signals['value_btc'],
+            mode='markers',
+            marker=dict(
+                symbol='triangle-up',
+                size=15,
+                color='#00ff9f',
+                line=dict(color='#000000', width=1)
+            ),
+            name='Entrada Compra',
+            hovertemplate='Compra<br>$%{y:,.2f}<br>%{x}<extra></extra>'
+        ))
+
+    # Sinais de venda
+    sell_signals = position_changes[position_changes['position'] == 'venda']
+    if not sell_signals.empty:
+        fig.add_trace(go.Scatter(
+            x=sell_signals['date'],
+            y=sell_signals['value_btc'],
+            mode='markers',
+            marker=dict(
+                symbol='triangle-down',
+                size=15,
+                color='#ff4444',
+                line=dict(color='#000000', width=1)
+            ),
+            name='Entrada Venda',
+            hovertemplate='Venda<br>$%{y:,.2f}<br>%{x}<extra></extra>'
+        ))
+
+    fig.update_layout(
+        plot_bgcolor='#131722',
+        paper_bgcolor='#131722',
+        title={
+            'text': 'Preço Bitcoin com sinais da IA',
+            'y': 0.95,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top',
+            'font': dict(color='#e1e1e1', size=20)
+        },
+        font=dict(color='#e1e1e1'),
+        xaxis=dict(
+            gridcolor='#1e222d',
+            showgrid=True,
+            zeroline=False,
+            rangeslider=dict(visible=False),
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=1, label="1d", step="day", stepmode="backward"),
+                    dict(count=7, label="7d", step="day", stepmode="backward"),
+                    dict(count=1, label="1m", step="month", stepmode="backward"),
+                    dict(count=3, label="3m", step="month", stepmode="backward"),
+                    dict(count=6, label="6m", step="month", stepmode="backward"),
+                    dict(count=1, label="1y", step="year", stepmode="backward"),
+                    dict(step="all")
+                ]),
+                font=dict(color='#e1e1e1'),
+                bgcolor='#131722',
+                activecolor='#1e222d'
+            )
+        ),
+        yaxis=dict(
+            gridcolor='#1e222d',
+            showgrid=True,
+            zeroline=False,
+            tickformat=',.2f',
+            title=dict(text='Preço USD', font=dict(color='#e1e1e1')),
+            side='right'
+        ),
+        legend=dict(
+            bgcolor='rgba(19,23,34,0.8)',
+            bordercolor='#1e222d',
+            font=dict(color='#e1e1e1'),
+            x=0,
+            y=1,
+        ),
+        hovermode='x unified',
+        margin=dict(l=10, r=50, t=40, b=10)
+    )
+
+    fig.update_xaxes(
+        showspikes=True,
+        spikecolor='#e1e1e1',
+        spikesnap='cursor',
+        spikemode='across',
+        spikethickness=1
+    )
+    fig.update_yaxes(
+        showspikes=True,
+        spikecolor='#e1e1e1',
+        spikesnap='cursor',
+        spikethickness=1
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+    
+
+def get_trade_summary(df):
+    """
+    Processa o DataFrame para mostrar um resumo das operações completas e em andamento.
+    """
+    # Cria uma cópia do DataFrame para não modificar o original
+    df = df.copy()
+    
+    # Inicializa listas para armazenar os dados das operações
+    trades = []
+    current_trade = None
+    entry_price = None
+    entry_date = None
+    
+    # Itera sobre os dados para encontrar operações
+    for index, row in df.iterrows():
+        if row['Recomendação'] in ['compra', 'venda']:
+            # Se não temos uma operação em andamento, inicia uma nova
+            if current_trade is None:
+                current_trade = row['Recomendação']
+                entry_price = row['Preço de Entrada']
+                entry_date = row['datetime']
+            # Se temos uma operação em andamento e a recomendação é diferente
+            elif row['Recomendação'] != current_trade:
+                # Calcula o retorno da operação
+                exit_price = row['btc_close']
+                if current_trade == 'compra':
+                    return_pct = ((exit_price - entry_price) / entry_price) * 100
+                else:
+                    return_pct = ((entry_price - exit_price) / entry_price) * 100
+                
+                # Adiciona a operação completa à lista
+                trades.append({
+                    'Data Entrada': entry_date,
+                    'Data Saída': row['datetime'],
+                    'Tipo': current_trade.capitalize(),
+                    'Preço Entrada': entry_price,
+                    'Preço Saída': exit_price,
+                    'Retorno (%)': round(return_pct, 2),
+                    'Status': 'Fechada'
+                })
+                
+                # Reinicia para nova operação
+                current_trade = row['Recomendação']
+                entry_price = row['Preço de Entrada']
+                entry_date = row['datetime']
+    
+    # Se existe uma operação em andamento, adiciona ela
+    if current_trade is not None:
+        last_price = df['btc_close'].iloc[-1]
+        if current_trade == 'compra':
+            return_pct = ((last_price - entry_price) / entry_price) * 100
+        else:
+            return_pct = ((entry_price - last_price) / entry_price) * 100
+        
+        trades.append({
+            'Data Entrada': entry_date,
+            'Data Saída': df['datetime'].iloc[-1],
+            'Tipo': current_trade.capitalize(),
+            'Preço Entrada': entry_price,
+            'Preço Saída': last_price,
+            'Retorno (%)': round(return_pct, 2),
+            'Status': 'Em Andamento'
+        })
+    
+    # Cria DataFrame com as operações
+    trades_df = pd.DataFrame(trades)
+    
+    # Formata as colunas
+    if not trades_df.empty:
+        trades_df['Data Entrada'] = pd.to_datetime(trades_df['Data Entrada']).dt.strftime('%Y-%m-%d %H:%M')
+        trades_df['Data Saída'] = pd.to_datetime(trades_df['Data Saída']).dt.strftime('%Y-%m-%d %H:%M')
+        trades_df['Preço Entrada'] = trades_df['Preço Entrada'].round(2)
+        trades_df['Preço Saída'] = trades_df['Preço Saída'].round(2)
+        
+        # Adiciona formatação condicional
+        trades_df['Retorno (%)'] = trades_df['Retorno (%)'].apply(
+            lambda x: f"+{x:.2f}%" if x > 0 else f"{x:.2f}%"
+        )
+    
+    return trades_df
+
+# Uso:
+def display_trade_summary(df):
+    trades_df = get_trade_summary(df)
+    
+    # Estiliza o DataFrame
+    st.markdown("### Resumo das Operações")
+    
+    # Calcula estatísticas
+    if not trades_df.empty:
+        total_trades = len(trades_df)
+        closed_trades = len(trades_df[trades_df['Status'] == 'Fechada'])
+        returns = pd.to_numeric(trades_df['Retorno (%)'].str.rstrip('%'))
+        avg_return = returns.mean()
+        
+        # Mostra métricas
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total de Operações", total_trades)
+        with col2:
+            st.metric("Operações Fechadas", closed_trades)
+        with col3:
+            st.metric("Retorno Médio", f"{avg_return:.2f}%")
+    
+    # Mostra a tabela
+    st.dataframe(
+        trades_df,
+        hide_index=True,
+        use_container_width=True
+    )
+    
 
 def main():
     if 'logged_in' not in st.session_state:
@@ -859,6 +1152,7 @@ def main():
         ai_returns = plot_cumulative_returns(df_returns)
         btc_returns = calculate_btc_cumulative_return()
         display_comparison_graph(ai_returns, btc_returns)
+        display_btc_price_signals(btc_data=btc_returns, trade_signals=df_returns)
 
         st.header("Última Análise GPT")
         gpt_analysis = get_gpt_analysis()
@@ -882,11 +1176,18 @@ def main():
         else:
             st.write("Nenhuma análise disponível com todos os dados necessários.")
 
-        df = get_bitcoin_data_from_db()
         display_4h_analysis()
+        st.write('## Histórico de recomendações BOT intradiário')
+        df_4h = get_all_4h_analysis()
+        st.dataframe(df_4h, height=400)
+        
         st.write("Tabela com histórico")
-        st.dataframe(df, height=400)
-
+        df = get_bitcoin_data_from_db()
+        display_trade_summary(df)
+        
+        st.write('## Histórico de Operações')
+        st.dataframe(df, height=200)
+        
         if 'update_counter' not in st.session_state:
             st.session_state.update_counter = 0
 
