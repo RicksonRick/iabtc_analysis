@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 from database.database_setting import connect_to_db
 #from exec_script import get_bitcoin_data
+import streamlit.components.v1 as components
+import plotly.graph_objects as go
 import re
 from sqlalchemy import create_engine
 import pandas as pd
@@ -962,7 +964,47 @@ def display_btc_price_signals(btc_data, trade_signals):
     )
 
     st.plotly_chart(fig, use_container_width=True)
+
+def trading_view_btc_price_signals(trade_signals=None, custom_chart=None):
+    """
+    Exibe gráfico TradingView
     
+    Args:
+        custom_chart (str): Código HTML do gráfico personalizado do TradingView
+    """
+    if custom_chart:
+        components.html(custom_chart, height=750)
+    else:
+        default_chart = """
+            <div class="tradingview-widget-container">
+                <div id="tradingview_chart"></div>
+                <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+                <script type="text/javascript">
+                    new TradingView.widget({
+                        "width": "100%",
+                        "height": 700,
+                        "symbol": "BINANCE:BTCUSDT",
+                        "interval": "D",
+                        "timezone": "Etc/UTC",
+                        "theme": "dark",
+                        "style": "1",
+                        "locale": "br",
+                        "toolbar_bg": "#131722",
+                        "enable_publishing": false,
+                        "hide_side_toolbar": false,
+                        "allow_symbol_change": true,
+                        "details": true,
+                        "studies": [
+                            "Volume@tv-basicstudies"
+                        ],
+                        "container_id": "tradingview_chart",
+                        "fullscreen": true,
+                        "show_popup_button": true
+                    });
+                </script>
+            </div>
+        """
+        components.html(default_chart, height=750)
 
 def get_trade_summary(df):
     """
@@ -1146,6 +1188,7 @@ def main():
         btc_returns = calculate_btc_cumulative_return()
         display_comparison_graph(ai_returns, btc_returns)
         display_btc_price_signals(btc_data=btc_returns, trade_signals=df_returns)
+        trading_view_btc_price_signals()
 
         st.header("Última Análise GPT")
         gpt_analysis = get_gpt_analysis()
