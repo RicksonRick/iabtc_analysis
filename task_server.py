@@ -142,7 +142,7 @@ def run_conversation():
 def run_4h_bot():
     print("Iniciando Bot 4h")
     bot_4h_response = Conversation4()
-    response = bot_4h_response.send()
+    response = bot_4h_response.analyze()
     print (response)
 
 def job_wrapper(func):
