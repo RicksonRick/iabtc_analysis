@@ -704,7 +704,7 @@ def get_latest_4h_analysis():
             connection.close()
             
 def get_all_4h_analysis():
-    """Obtém a análise mais recente do bot 4h do banco de dados"""
+    """Obtém todas as análises do bot 4h do banco de dados"""
     try:
         connection = connect_to_db()
         with connection.cursor() as cursor:
@@ -714,21 +714,25 @@ def get_all_4h_analysis():
                 FROM bot_4h_analysis
                 ORDER BY analysis_datetime DESC
             """)
-            result = cursor.fetchone()
+            results = cursor.fetchall()
             
-            if result:
-                return {
-                    'datetime': result[0],
-                    'action': result[1],
-                    'justification': result[2],
-                    'stop_loss': result[3],
-                    'take_profit': result[4],
-                    'attention_points': result[5]
-                }
-            return None
+            if results:
+                analysis_list = []
+                for result in results:
+                    analysis = {
+                        'datetime': result[0],
+                        'action': result[1],
+                        'justification': result[2],
+                        'stop_loss': result[3],
+                        'take_profit': result[4],
+                        'attention_points': result[5]
+                    }
+                    analysis_list.append(analysis)
+                return analysis_list
+            return []
     except Exception as e:
-        print(f"Erro ao obter análise 4h: {e}")
-        return None
+        print(f"Erro ao obter análises 4h: {e}")
+        return []
     finally:
         if connection:
             connection.close()

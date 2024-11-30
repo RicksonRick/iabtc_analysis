@@ -161,5 +161,5 @@ def get_latest_analysis() -> Dict[str, Any]:
             connection.close()
 
 # Exemplo de uso
-if __name__ == "__main__":
-    update_db()
+#if __name__ == "__main__":
+ #   update_db()

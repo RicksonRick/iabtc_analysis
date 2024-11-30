@@ -249,23 +249,23 @@ class Conversation4:
             print(f"Erro ao conectar à API da OpenAI: {e}")
             return
         
-if __name__ == '__main__':
+#if __name__ == '__main__':
     # Inicializa a classe Conversation4
-    conversation = Conversation4()
+ #   conversation = Conversation4()
     
     # Testa o método de análise de movimentação de Bitcoin
-    print("Teste: Movimentação de Bitcoin desde 00:00 UTC")
-    btc_movement = conversation.get_bitcoin_movement_since_midnight()
-    print(btc_movement)
+  #  print("Teste: Movimentação de Bitcoin desde 00:00 UTC")
+   # btc_movement = conversation.get_bitcoin_movement_since_midnight()
+    #print(btc_movement)
     
     # Testa o método que obtém a última previsão
-    print("\nTeste: Última Previsão")
-    last_prediction = conversation.get_last_prediction()
-    print(last_prediction)
+   # print("\nTeste: Última Previsão")
+    #last_prediction = conversation.get_last_prediction()
+    #print(last_prediction)
     
     # Testa o método de análise (com as dependências necessárias)
-    print("\nTeste: Análise de Dados")
-    try:
-        conversation.analyze()
-    except Exception as e:
-        print(f"Erro durante a análise: {e}")
+    #print("\nTeste: Análise de Dados")
+    #try:
+     #   conversation.analyze()
+    #except Exception as e:
+     #   print(f"Erro durante a análise: {e}")
