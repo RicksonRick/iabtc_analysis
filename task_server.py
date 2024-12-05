@@ -150,12 +150,28 @@ def run_4h_bot():
     send_4Hdiscord_message(response)
     print (response)
     
+def format_bot_response(json_response):
+    message = f"""🤖 **Análise BTC 4H**
+
+📊 **Ação Recomendada**: {json_response['recommended_action']}
+📝 **Justificativa**: {json_response['justification']}
+
+💰 **Níveis**:
+• Stop Loss: ${json_response['stop_loss']:,}
+• Take Profit: ${json_response['take_profit']:,}
+
+⚠️ **Pontos de Atenção**:
+"""
+    for point in json_response['attention_points']:
+        message += f"• {point}\n"
+    
+    return message
+
 def send_4Hdiscord_message(message, webhook_url="https://discord.com/api/webhooks/1313353961549336596/vLnkkVxs008iR_QdwKVKOR5FifoX2N78s2JWVndlJsyWb2_uOF9WomR5dfDk8nbH24-q"):
     data = {
-        "content": message,
+        "content": format_bot_response(message),
         "username": "IA análise 4H"
     }
-    
     response = requests.post(webhook_url, json=data)
     
     if response.status_code in [200, 204]:
