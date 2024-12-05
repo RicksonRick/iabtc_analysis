@@ -159,9 +159,9 @@ def job_wrapper(func):
 def initialize_scheduler():
     """Inicializa todas as tarefas agendadas"""
     # Tarefas diárias existentes
-    schedule.every().day.at("21:00").do(job_wrapper(run_conversation))
-    schedule.every().day.at("21:05").do(job_wrapper(insert_actual_bitcoin_data))
-    schedule.every().day.at("21:15").do(job_wrapper(enviar_dados_para_urls))
+    schedule.every().day.at("00:00").do(job_wrapper(run_conversation))
+    schedule.every().day.at("00:05").do(job_wrapper(insert_actual_bitcoin_data))
+    schedule.every().day.at("00:15").do(job_wrapper(enviar_dados_para_urls))
     
     # Bot 4h - executa 5 vezes ao dia
     schedule.every().day.at("04:00").do(job_wrapper(run_4h_bot))
