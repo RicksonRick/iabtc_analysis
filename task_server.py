@@ -10,8 +10,10 @@ from bot_4h.bot_4h_chatbot import Conversation4
 from database.database_setting import insert_actual_bitcoin_data, connect_to_db
 from analysis.exec_script import get_bitcoin_price_and_variation
 import pandas as pd
+import requests
 import logging
 from webhook import enviar_dados_para_urls, get_bitcoin_data
+from streamlit_app import calculate_trade_returns, plot_cumulative_returns, calculate_btc_cumulative_return, display_comparison_graph
 
 
 # Configuração de logging
@@ -136,14 +138,52 @@ def run_conversation():
     ai_response = Conversation()
     response = ai_response.send()
     save_gpt_analysis(response)
+    send_discord_message(response)
     print(response)
+    
     print(f"Análise GPT executada em {datetime.now(brazil_tz)}, {response}")
     
 def run_4h_bot():
     print("Iniciando Bot 4h")
     bot_4h_response = Conversation4()
     response = bot_4h_response.analyze()
+    send_4Hdiscord_message(response)
     print (response)
+    
+def send_4Hdiscord_message(message, webhook_url="https://discord.com/api/webhooks/1313353961549336596/vLnkkVxs008iR_QdwKVKOR5FifoX2N78s2JWVndlJsyWb2_uOF9WomR5dfDk8nbH24-q"):
+    data = {
+        "content": message,
+        "username": "IA análise 4H"
+    }
+    
+    response = requests.post(webhook_url, json=data)
+    
+    if response.status_code in [200, 204]:
+        print("Mensagem enviada com sucesso!")
+    else:
+        print(f"Erro ao enviar mensagem: {response.status_code}")
+        
+def send_discord_message(message, webhook_url="https://discord.com/api/webhooks/1313353961549336596/vLnkkVxs008iR_QdwKVKOR5FifoX2N78s2JWVndlJsyWb2_uOF9WomR5dfDk8nbH24-q"):
+    data = {
+        "content": message,
+        "username": "IA análise diária"
+    }
+    df_returns = calculate_trade_returns()
+    ai_returns = plot_cumulative_returns(df_returns)
+    btc_returns = calculate_btc_cumulative_return()
+    fig = display_comparison_graph(ai_returns, btc_returns)
+    
+    img_bytes = fig.to_image(format="png")
+    
+    files = {'file': ('analysis.png', img_bytes, 'image/png')}
+    data = {"content": message, "username": "IA análise diária"}
+    
+    response = requests.post(webhook_url, data=data, files=files)
+    
+    if response.status_code in [200, 204]:
+        print("Mensagem enviada com sucesso!")
+    else:
+        print(f"Erro ao enviar mensagem: {response.status_code}")
 
 def job_wrapper(func):
     """Wrapper para garantir que as tarefas continuem executando mesmo com erros"""
@@ -180,10 +220,10 @@ def initialize_scheduler():
 if __name__ == "__main__":
     logging.info("Iniciando servidor de tarefas")
     
-    # Inicializa o scheduler
+    #Inicializa o scheduler
     initialize_scheduler()
     
-    # Execução inicial dos bots
+     #Execução inicial dos bots
     logging.info("Executando análises iniciais")
     
     logging.info(f"Servidor de tarefas iniciado. (Horário de Brasília: {datetime.now(brazil_tz)})")
@@ -204,5 +244,6 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"Erro no loop principal: {str(e)}")
             time.sleep(5)
-            
-            
+
+#if __name__ == "__main__":
+#    send_discord_message("Teste de mensagem Bot Diário")

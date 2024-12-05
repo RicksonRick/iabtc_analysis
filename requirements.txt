@@ -18,3 +18,4 @@ schedule
 matplotlib
 uvicorn
 fastapi
+kaleido

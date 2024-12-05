@@ -16,6 +16,7 @@ import numpy as np
 import requests
 import matplotlib.pyplot as plt
 import hashlib
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -394,8 +395,8 @@ def display_comparison_graph(ai_returns, btc_returns):
 
     fig.update_xaxes(showspikes=True, spikecolor='#e1e1e1', spikesnap='cursor', spikemode='across')
     fig.update_yaxes(showspikes=True, spikecolor='#e1e1e1', spikesnap='cursor')
-
-    st.plotly_chart(fig, use_container_width=True)
+    
+    return fig
 
 def get_gpt_analysis():
     connection = connect_to_db()
@@ -1190,7 +1191,8 @@ def main():
         df_returns = calculate_trade_returns()
         ai_returns = plot_cumulative_returns(df_returns)
         btc_returns = calculate_btc_cumulative_return()
-        display_comparison_graph(ai_returns, btc_returns)
+        fig = display_comparison_graph(ai_returns, btc_returns)
+        st.plotly_chart(fig, use_container_width=True)
         display_btc_price_signals(btc_data=btc_returns, trade_signals=df_returns)
         trading_view_btc_price_signals()
 
