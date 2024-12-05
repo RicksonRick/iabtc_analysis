@@ -133,24 +133,9 @@ def update_bitcoin_data():
     save_bitcoin_data(data)
     print(f"Dados do Bitcoin atualizados em {datetime.now(brazil_tz)}")
     
-def run_conversation():
-    print("Iniciando analise do GPT")
-    ai_response = Conversation()
-    response = ai_response.send()
-    save_gpt_analysis(response)
-    send_discord_message(response)
-    print(response)
+def format_bot_response(message):
+    json_response = json.loads(message) if isinstance(message, str) else message
     
-    print(f"Análise GPT executada em {datetime.now(brazil_tz)}, {response}")
-    
-def run_4h_bot():
-    print("Iniciando Bot 4h")
-    bot_4h_response = Conversation4()
-    response = bot_4h_response.analyze()
-    send_4Hdiscord_message(response)
-    print (response)
-    
-def format_bot_response(json_response):
     message = f"""🤖 **Análise BTC 4H**
 
 📊 **Ação Recomendada**: {json_response['recommended_action']}
@@ -178,6 +163,24 @@ def send_4Hdiscord_message(message, webhook_url="https://discord.com/api/webhook
         print("Mensagem enviada com sucesso!")
     else:
         print(f"Erro ao enviar mensagem: {response.status_code}")
+    
+def run_conversation():
+    print("Iniciando analise do GPT")
+    ai_response = Conversation()
+    response = ai_response.send()
+    save_gpt_analysis(response)
+    send_discord_message(response)
+    print(response)
+    
+    print(f"Análise GPT executada em {datetime.now(brazil_tz)}, {response}")
+    
+def run_4h_bot():
+    print("Iniciando Bot 4h")
+    bot_4h_response = Conversation4()
+    response = bot_4h_response.analyze()
+    send_4Hdiscord_message(message=response)
+    print (response)
+    
         
 def send_discord_message(message, webhook_url="https://discord.com/api/webhooks/1313353961549336596/vLnkkVxs008iR_QdwKVKOR5FifoX2N78s2JWVndlJsyWb2_uOF9WomR5dfDk8nbH24-q"):
     data = {
@@ -262,4 +265,5 @@ if __name__ == "__main__":
             time.sleep(5)
 
 #if __name__ == "__main__":
-#    send_discord_message("Teste de mensagem Bot Diário")
+#    oi = run_4h_bot()
+#    print(oi)
