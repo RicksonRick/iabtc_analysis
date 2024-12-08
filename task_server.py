@@ -182,20 +182,50 @@ def run_4h_bot():
     print (response)
     
         
+def format_message_string(message_str):
+    emoji_map = {
+        "Recomendação": "📈",
+        "Nível de Confiança": "🎯",
+        "Valor do Bitcoin": "💰",
+        "Stop Loss": "🛑",
+        "Take Profit": "✨",
+        "Relação Risco/Recompensa": "⚖️"
+    }
+    
+    lines = message_str.split('\n')
+    formatted_lines = []
+    
+    formatted_lines.append("# 📊 Análise do Mercado Bitcoin\n")
+    
+    for line in lines:
+        line = line.strip()
+        if line:
+            for key, emoji in emoji_map.items():
+                if line.startswith(key):
+                    formatted_lines.append(f"{emoji} {line}")
+                    break
+            else:  
+                formatted_lines.append(line)
+    
+    formatted_message = "```md\n" + "\n".join(formatted_lines) + "\n```"
+    return formatted_message
+
 def send_discord_message(message, webhook_url="https://discord.com/api/webhooks/1313353961549336596/vLnkkVxs008iR_QdwKVKOR5FifoX2N78s2JWVndlJsyWb2_uOF9WomR5dfDk8nbH24-q"):
+    # Formata a mensagem string
+    formatted_message = format_message_string(message)
+    
     data = {
-        "content": message,
+        "content": formatted_message,
         "username": "IA análise diária"
     }
+    
     df_returns = calculate_trade_returns()
     ai_returns = plot_cumulative_returns(df_returns)
     btc_returns = calculate_btc_cumulative_return()
     fig = display_comparison_graph(ai_returns, btc_returns)
-    
     img_bytes = fig.to_image(format="png")
     
     files = {'file': ('analysis.png', img_bytes, 'image/png')}
-    data = {"content": message, "username": "IA análise diária"}
     
     response = requests.post(webhook_url, data=data, files=files)
     
