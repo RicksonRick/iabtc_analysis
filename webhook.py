@@ -8,7 +8,7 @@ from database.database_setting import connect_to_db
 
 router = APIRouter()
 
-URLS_FILE = "urls.json"
+URLS_FILE = "/.urls.json"
 
 class URLRequest(BaseModel):
     url: str
