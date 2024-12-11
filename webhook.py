@@ -138,10 +138,12 @@ async def cadastrar_url(request: URLRequest, api_key: str = Header(...)):
     """)
 def receber_previsões(api_key: str = Header(...)):
     data = load_data()
+    print(data)
     if api_key not in data["API_KEYS"]:
         return "API não cadastrada"
     
     status, dados = get_bitcoin_data()
+    print(f"Dados: {dados}")
     if status == 200:
         return {"status": status, "dados": dados}
     
