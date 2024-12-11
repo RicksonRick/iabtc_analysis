@@ -136,12 +136,7 @@ async def cadastrar_url(request: URLRequest, api_key: str = Header(...)):
     ***Exemplo de resposta da análise do GPT:***
     (200, {'recommendation': 'Compra', 'stop_loss': 66200.0, 'take_profit': 68500.0, 'risk_return': '1:2', 'value_btc': 67187.0, 'datetime': '2024-10-23T00:30:03.324596'})
     """)
-def receber_previsões(api_key: str = Header(...)):
-    data = load_data()
-    print(data)
-    if api_key not in data["API_KEYS"]:
-        return "API não cadastrada"
-    
+def receber_previsões():
     status, dados = get_bitcoin_data()
     print(f"Dados: {dados}")
     if status == 200:
