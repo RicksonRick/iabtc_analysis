@@ -268,7 +268,7 @@ def initialize_scheduler():
 
 if __name__ == "__main__":
     logging.info("Iniciando servidor de tarefas")
-    
+    print("executando BOT 4H")
     #Inicializa o scheduler
     initialize_scheduler()
     

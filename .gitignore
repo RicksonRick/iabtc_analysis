@@ -1,2 +1,4 @@
 .env
 urls.json
+__pycache__
+.venv
