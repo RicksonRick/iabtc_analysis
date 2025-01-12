@@ -152,7 +152,7 @@ def format_bot_response(message):
     
     return message
 
-def send_4Hdiscord_message(message, webhook_url="https://discord.com/api/webhooks/1313353961549336596/vLnkkVxs008iR_QdwKVKOR5FifoX2N78s2JWVndlJsyWb2_uOF9WomR5dfDk8nbH24-q"):
+def send_4Hdiscord_message(message, webhook_url="https://discord.com/api/webhooks/1328131763888980018/791tj452ApNXgTLlx8cOo4MRGkYuPjFktXc7mnYuXHr1PszZt16F1Hf23YLjV44qjCiZ"):
     data = {
         "content": format_bot_response(message),
         "username": "IA análise 4H"
@@ -210,7 +210,7 @@ def format_message_string(message_str):
     formatted_message = "```md\n" + "\n".join(formatted_lines) + "\n```"
     return formatted_message
 
-def send_discord_message(message, webhook_url="https://discord.com/api/webhooks/1313353961549336596/vLnkkVxs008iR_QdwKVKOR5FifoX2N78s2JWVndlJsyWb2_uOF9WomR5dfDk8nbH24-q"):
+def send_discord_message(message, webhook_url="https://discord.com/api/webhooks/1328131763888980018/791tj452ApNXgTLlx8cOo4MRGkYuPjFktXc7mnYuXHr1PszZt16F1Hf23YLjV44qjCiZ"):
     # Formata a mensagem string
     formatted_message = format_message_string(message)
     
